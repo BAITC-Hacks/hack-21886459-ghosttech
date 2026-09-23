@@ -1,0 +1,52 @@
+[
+  {
+    "id": "p1",
+    "task_id": "t1",
+    "team_id": "team1",
+    "idea": "Сделаем простой интерфейс для педагогов и родителей, где видно посещаемость и список пропусков.",
+    "plan": "Сначала соберём список полей, затем настроим учёт посещаемости и автоматические уведомления.",
+    "deadline": "2026-10-05",
+    "prototype_url": "https://example.com/prototype/edu-visit",
+    "status": "accepted"
+  },
+  {
+    "id": "p2",
+    "task_id": "t2",
+    "team_id": "team5",
+    "idea": "Построим систему распределения заявок на кружки по пулам и очередям ожидания.",
+    "plan": "Нарисуем MVP списка заявок, затем добавим фильтры и статусы по группам.",
+    "deadline": "2026-10-08",
+    "prototype_url": "https://example.com/prototype/circle-flow",
+    "status": "pending"
+  },
+  {
+    "id": "p3",
+    "task_id": "t3",
+    "team_id": "team2",
+    "idea": "Сделаем дашборд статусов заказов и аналитический экран для задержек сборки.",
+    "plan": "Построим карточки заказов, фильтры и таймлайн сборки по этапам.",
+    "deadline": "2026-10-12",
+    "prototype_url": "https://example.com/prototype/retail-flow",
+    "status": "rejected"
+  },
+  {
+    "id": "p4",
+    "task_id": "t4",
+    "team_id": "team4",
+    "idea": "Сконцентрируемся на визуализации маршрутов и причин задержек между складами.",
+    "plan": "Соберём реестр маршрутов и аномалий, затем покажем проблемные участки на карте.",
+    "deadline": "2026-10-15",
+    "prototype_url": "https://example.com/prototype/logi-map",
+    "status": "accepted"
+  },
+  {
+    "id": "p5",
+    "task_id": "t5",
+    "team_id": "team3",
+    "idea": "Делаем единый канал заявок для жителей и удобный статусный экран для сотрудников.",
+    "plan": "Реализуем модель приоритетов и рабочий поток для исполнителей.",
+    "deadline": "2026-10-10",
+    "prototype_url": "https://example.com/prototype/city-requests",
+    "status": "pending"
+  }
+]

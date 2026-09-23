@@ -1,0 +1,42 @@
+[
+  {
+    "id": "team1",
+    "name": "EduPulse",
+    "interests": ["образование", "аналитика", "цифровые сервисы"],
+    "skills": ["UX", "product", "дизайн"],
+    "tech": ["Figma", "web"],
+    "points": 120
+  },
+  {
+    "id": "team2",
+    "name": "RetailFlow",
+    "interests": ["ритейл", "логистика", "маркетплейсы"],
+    "skills": ["аналитика", "операционный процесс"],
+    "tech": ["Python", "SQL"],
+    "points": 80
+  },
+  {
+    "id": "team3",
+    "name": "CityOps",
+    "interests": ["городские сервисы", "госуслуги", "карта города"],
+    "skills": ["администрирование", "модерация"],
+    "tech": ["React", "maps"],
+    "points": 95
+  },
+  {
+    "id": "team4",
+    "name": "LogiBoost",
+    "interests": ["логистика", "доставка", "маршруты"],
+    "skills": ["операции", "автоматизация"],
+    "tech": ["Python", "API"],
+    "points": 140
+  },
+  {
+    "id": "team5",
+    "name": "EdTech Lab",
+    "interests": ["образование", "процессы", "онлайн-обучение"],
+    "skills": ["продукт", "коммуникации", "аналитика"],
+    "tech": ["JavaScript", "web"],
+    "points": 110
+  }
+]

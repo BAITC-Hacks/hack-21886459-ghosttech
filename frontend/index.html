@@ -1,32 +1,160 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GhostTech</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <script src="/static/app.js" defer></script>
-</head>
-<body>
-  <main>
-    <p class="eyebrow">GHOSTTECH / STARTER</p>
-    <h1>Всё готово к работе.</h1>
-    <p>Python + FastAPI + SQLite. Фронтенд без сборки.</p>
-    <p id="status" role="status">Подключаемся к API…</p>
-    <section aria-labelledby="notes-title">
-      <h2 id="notes-title">Заметки</h2>
-      <p>Добавьте заметку — она сохранится в базе после перезапуска.</p>
-      <form id="note-form">
-        <label for="note-text">Текст заметки</label>
-        <div class="form-row">
-          <input id="note-text" name="text" maxlength="1000" required placeholder="Первая идея для проекта">
-          <button type="submit">Добавить</button>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GhostTech — задачи и команды</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./mock.js" defer></script>
+    <script src="./api.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">GhostTech</p>
+          <h1>Рейтинг качества бизнес-задач</h1>
         </div>
-      </form>
-      <p id="error" role="alert"></p>
-      <ul id="notes"></ul>
-    </section>
-    <a href="/docs">Документация API ↗</a>
-  </main>
-</body>
+        <div id="mode-label" class="status-pill" aria-live="polite">Режим: Демо-режим без ключа</div>
+      </header>
+
+      <nav class="tabs" aria-label="Основные разделы">
+        <button class="tab is-active" type="button" data-tab="business-task" aria-selected="true">Бизнес: новая задача</button>
+        <button class="tab" type="button" data-tab="catalog" aria-selected="false">Каталог</button>
+        <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Бизнес: отклики</button>
+      </nav>
+
+      <main>
+        <section id="business-task" class="tab-panel is-active" aria-label="Бизнес: новая задача">
+          <div class="wizard-shell">
+            <div class="wizard-steps" aria-label="Пошаговый мастер задачи">
+              <button class="wizard-step is-active" type="button" data-step="1">1. Черновик</button>
+              <button class="wizard-step" type="button" data-step="2">2. Уточнение</button>
+              <button class="wizard-step" type="button" data-step="3">3. Карточка</button>
+              <button class="wizard-step" type="button" data-step="4">4. Публикация</button>
+            </div>
+
+            <div class="wizard-panel" data-panel="1">
+              <div class="field-block">
+                <label for="draft-text">Черновик задачи</label>
+                <textarea id="draft-text" rows="8" placeholder="Опишите проблему, потребность и текущую ситуацию..."></textarea>
+              </div>
+
+              <div class="field-row two-columns">
+                <div class="field-block">
+                  <label for="task-topic">Тема</label>
+                  <select id="task-topic">
+                    <option value="">Выберите тему</option>
+                    <option value="образование">Образование</option>
+                    <option value="ритейл">Ритейл</option>
+                    <option value="логистика">Логистика</option>
+                    <option value="здравоохранение">Здравоохранение</option>
+                    <option value="городские сервисы">Городские сервисы</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="action-row">
+                <button id="analyze-button" class="primary-button" type="button">Проанализировать</button>
+                <button id="sample-button" class="secondary-button" type="button">Подставить пример</button>
+              </div>
+            </div>
+
+            <div class="wizard-panel" data-panel="2" hidden>
+              <div class="panel-header inline">
+                <h3>Уточнение деталей</h3>
+                <span id="questions-counter" class="muted">0 вопросов</span>
+              </div>
+              <div id="question-list" class="questions-list"></div>
+              <div class="action-row">
+                <button id="build-card-button" class="primary-button" type="button">Собрать карточку</button>
+              </div>
+            </div>
+
+            <div class="wizard-panel" data-panel="3" hidden>
+              <div class="card-layout">
+                <div id="card-form" class="card-form"></div>
+
+                <aside class="score-panel">
+                  <div class="score-header">
+                    <span class="score-label">Рейтинг готовности</span>
+                    <span id="score-level" class="level-badge level-draft">Черновик</span>
+                  </div>
+                  <div id="score-value" class="score-value">0</div>
+                  <div class="progress-track" aria-label="Прогресс рейтинга">
+                    <span id="score-progress" class="progress-bar"></span>
+                  </div>
+                  <div class="score-breakdown">
+                    <h4>Расшифровка по полям</h4>
+                    <ul id="breakdown-list" class="breakdown-list"></ul>
+                  </div>
+                  <div class="score-tips">
+                    <h4>Как поднять рейтинг</h4>
+                    <ul id="tips-list" class="tips-list"></ul>
+                  </div>
+                </aside>
+              </div>
+            </div>
+
+            <div class="wizard-panel" data-panel="4" hidden>
+              <div class="publish-box">
+                <h3>Публикация задачи</h3>
+                <label class="checkbox-row">
+                  <input id="confirm-check" type="checkbox">
+                  <span>Я проверил(а) карточку, сведения достоверны</span>
+                </label>
+                <div class="action-row">
+                  <button id="publish-button" class="primary-button" type="button" disabled>Опубликовать</button>
+                </div>
+                <p id="publish-message" class="publish-message" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="catalog" class="tab-panel" aria-label="Каталог" hidden>
+          <div class="panel-header">
+            <h2>Каталог задач</h2>
+            <span id="catalog-counter" class="muted">0 задач</span>
+          </div>
+          <div class="catalog-controls">
+            <label>
+              Тема
+              <select id="catalog-topic">
+                <option value="">Все темы</option>
+                <option value="образование">Образование</option>
+                <option value="ритейл">Ритейл</option>
+                <option value="логистика">Логистика</option>
+                <option value="городские сервисы">Городские сервисы</option>
+              </select>
+            </label>
+            <label>
+              Уровень
+              <select id="catalog-level">
+                <option value="">Все уровни</option>
+                <option value="priority">Приоритетная</option>
+                <option value="ready">Готовая</option>
+                <option value="working">Рабочая</option>
+                <option value="draft">Черновик</option>
+              </select>
+            </label>
+          </div>
+          <div id="catalog-list" class="task-grid"></div>
+        </section>
+
+        <section id="business-proposals" class="tab-panel" aria-label="Бизнес: отклики" hidden>
+          <div class="panel-header">
+            <h2>Отклики команд</h2>
+            <span class="muted">Решение принимает бизнес</span>
+          </div>
+          <div class="proposal-controls">
+            <label for="proposal-task">Задача</label>
+            <select id="proposal-task"></select>
+          </div>
+          <div id="proposal-list" class="proposal-list"></div>
+        </section>
+      </main>
+    </div>
+  </body>
 </html>
