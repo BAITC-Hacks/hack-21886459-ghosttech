@@ -1,10 +1,12 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query, Request
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app import assistant
 from app.database import Db
-from app.models import Progress, Proposal, Task, Team
+from app.models import Participant, Progress, Proposal, Task, Team
 from app.schemas import (
     AnalyzeRead,
     AnalyzeRequest,
@@ -14,6 +16,7 @@ from app.schemas import (
     CardRequest,
     Decision,
     Level,
+    ParticipantRead,
     ProgressCreate,
     ProgressRead,
     ProposalCreate,
@@ -25,6 +28,7 @@ from app.schemas import (
     TaskUpdate,
     TeamCreate,
     TeamRead,
+    TopicRead,
 )
 from app.scoring import score_card
 
@@ -56,6 +60,8 @@ def team_read(db, team: Team):
         "skills": team.skills,
         "tech": team.tech,
         "points": team_points(db, team),
+        "members": team.members,
+        "is_demo": team.is_demo,
     }
 
 
@@ -83,6 +89,9 @@ def task_read(db, task: Task):
         "confirmed": task.confirmed,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
+        "owner": task.owner,
+        "is_demo": task.is_demo,
+        "work_tags": task.work_tags,
         **score_card(card).model_dump(),
         "proposals": [proposal_read(p) for p in db.scalars(proposals).all()],
     }
@@ -101,6 +110,9 @@ def task_summaries(db, query):
             "level": task.level,
             "created_at": task.created_at,
             "proposals_count": total,
+            "owner": task.owner,
+            "is_demo": task.is_demo,
+            "work_tags": task.work_tags,
         }
         for task, total in db.execute(query.add_columns(count))
     ]
@@ -129,6 +141,11 @@ def tasks(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     include_drafts: bool = False,
+    owner_id: str = Query("", max_length=32),
+    search: str = Query("", max_length=200),
+    work_type: str = Query("", max_length=100),
+    proposals: Literal["any", "none", "has"] = "any",
+    sort: Literal["score_desc", "score_asc", "newest", "oldest", "proposals_desc"] = "score_desc",
 ):
     query = select(Task)
     if not include_drafts:
@@ -137,22 +154,53 @@ def tasks(
         query = query.where(Task.topic == topic)
     if level:
         query = query.where(Task.level == level)
-    return task_summaries(
-        db,
-        query.order_by(Task.score.desc(), Task.created_at.desc(), Task.id)
-        .offset(offset)
-        .limit(limit),
-    )
+    if owner_id:
+        query = query.where(Task.owner_id == owner_id)
+    if search.strip():
+        query = query.where(
+            or_(
+                Task.title.icontains(search.strip(), autoescape=True),
+                Task.need.icontains(search.strip(), autoescape=True),
+            )
+        )
+    if work_type:
+        if db.get_bind().dialect.name == "sqlite":
+            tags = func.json_each(Task.work_tags).table_valued("value")
+        else:
+            tags = (
+                func.json_array_elements_text(Task.work_tags).table_valued("value").render_derived()
+            )
+        query = query.where(
+            select(1).select_from(tags).where(tags.c.value == work_type).correlate(Task).exists()
+        )
+    count = select(func.count(Proposal.id)).where(Proposal.task_id == Task.id).scalar_subquery()
+    if proposals == "none":
+        query = query.where(count == 0)
+    elif proposals == "has":
+        query = query.where(count > 0)
+    ordering = {
+        "score_desc": (Task.score.desc(), Task.created_at.desc()),
+        "score_asc": (Task.score.asc(), Task.created_at.desc()),
+        "newest": (Task.created_at.desc(), Task.score.desc()),
+        "oldest": (Task.created_at.asc(), Task.score.desc()),
+        "proposals_desc": (count.desc(), Task.score.desc(), Task.created_at.desc()),
+    }
+    return task_summaries(db, query.order_by(*ordering[sort], Task.id).offset(offset).limit(limit))
 
 
 @router.post("/tasks", response_model=TaskRead, status_code=201, tags=["tasks"])
 def create_task(data: TaskCreate, db: Db):
+    owner = find(db, Participant, data.owner_id) if data.owner_id else None
+    if owner and owner.role != "business":
+        raise HTTPException(422, "Автором задачи может быть только предприниматель")
     score = score_card(data.card)
     task = Task(
         **data.card.model_dump(),
         confirmed=data.confirmed,
         score=score.score,
         level=score.level,
+        owner_id=data.owner_id,
+        is_demo=bool(owner and owner.is_demo),
     )
     db.add(task)
     db.commit()
@@ -182,6 +230,37 @@ def update_task(task_id: str, data: TaskUpdate, db: Db):
     db.commit()
     db.refresh(task)
     return task_read(db, task)
+
+
+@router.get("/topics", response_model=list[TopicRead], tags=["tasks"])
+def topics(db: Db):
+    return [
+        {"topic": topic, "tasks_count": count}
+        for topic, count in db.execute(
+            select(Task.topic, func.count(Task.id))
+            .where(Task.confirmed.is_(True))
+            .group_by(Task.topic)
+            .order_by(Task.topic)
+        )
+    ]
+
+
+@router.get("/participants", response_model=list[ParticipantRead], tags=["participants"])
+def participants(
+    db: Db,
+    role: Literal["business", "student"] | None = None,
+    team_id: str = Query("", max_length=32),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    query = select(Participant)
+    if role:
+        query = query.where(Participant.role == role)
+    if team_id:
+        query = query.where(Participant.team_id == team_id)
+    return db.scalars(
+        query.order_by(Participant.name, Participant.id).offset(offset).limit(limit)
+    ).all()
 
 
 @router.get("/teams", response_model=list[TeamRead], tags=["teams"])

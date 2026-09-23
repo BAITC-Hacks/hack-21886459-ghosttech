@@ -33,6 +33,13 @@ def create_db_engine(settings: Settings):
 
         @event.listens_for(engine, "connect")
         def configure_sqlite(connection, _):
+            # SQLite's built-in lower() handles only ASCII; catalog search also uses Cyrillic.
+            connection.create_function(
+                "lower",
+                1,
+                lambda value: value.lower() if value is not None else None,
+                deterministic=True,
+            )
             cursor = connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()

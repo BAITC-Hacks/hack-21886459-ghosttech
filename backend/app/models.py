@@ -33,6 +33,27 @@ class Team(Base):
     skills: Mapped[list[str]] = mapped_column(JSON, default=list)
     tech: Mapped[list[str]] = mapped_column(JSON, default=list)
     base_points: Mapped[int] = mapped_column(default=0)
+    is_demo: Mapped[bool] = mapped_column(default=False)
+    members: Mapped[list["Participant"]] = relationship(back_populates="team", lazy="selectin")
+
+
+class Participant(Base):
+    """Public demo profiles, without accounts or authentication credentials."""
+
+    __tablename__ = "participants"
+    __table_args__ = (
+        CheckConstraint("role IN ('business', 'student')", name="ck_participant_role"),
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(100))
+    role: Mapped[str] = mapped_column(String(16))
+    organization: Mapped[str] = mapped_column(String(150), default="")
+    bio: Mapped[str] = mapped_column(Text, default="")
+    interests: Mapped[list[str]] = mapped_column(JSON, default=list)
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    is_demo: Mapped[bool] = mapped_column(default=True)
+    team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"), index=True)
+    team: Mapped["Team | None"] = relationship(back_populates="members")
 
 
 class Task(Base):
@@ -43,6 +64,10 @@ class Task(Base):
         Index("ix_tasks_catalog", "confirmed", "topic", "level", "score"),
     )
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    owner_id: Mapped[str | None] = mapped_column(ForeignKey("participants.id"), index=True)
+    owner: Mapped["Participant | None"] = relationship(lazy="selectin")
+    is_demo: Mapped[bool] = mapped_column(default=False)
+    work_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     title: Mapped[str] = mapped_column(String(200))
     topic: Mapped[str] = mapped_column(String(100))
     context: Mapped[str] = mapped_column(Text, default="")

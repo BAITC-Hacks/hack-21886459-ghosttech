@@ -36,6 +36,8 @@
   window.api = {
     USE_MOCK: false,
     getHealth: () => request('/health'),
+    getTopics: () => request('/topics'),
+    getParticipants: (params) => request(`/participants${query(params)}`),
     analyzeTask: (body) => request('/tasks/analyze', { method: 'POST', body }),
     buildCard: (body) => request('/tasks/build-card', { method: 'POST', body }),
     scoreCard: (body) => request('/tasks/score', { method: 'POST', body }),

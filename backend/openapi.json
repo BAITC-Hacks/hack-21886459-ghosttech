@@ -221,6 +221,71 @@
               "default": false,
               "title": "Include Drafts"
             }
+          },
+          {
+            "name": "owner_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "default": "",
+              "title": "Owner Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "work_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Work Type"
+            }
+          },
+          {
+            "name": "proposals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "any",
+                "none",
+                "has"
+              ],
+              "type": "string",
+              "default": "any",
+              "title": "Proposals"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "score_desc",
+                "score_asc",
+                "newest",
+                "oldest",
+                "proposals_desc"
+              ],
+              "type": "string",
+              "default": "score_desc",
+              "title": "Sort"
+            }
           }
         ],
         "responses": {
@@ -365,6 +430,122 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/topics": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Topics",
+        "operationId": "topics_api_topics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TopicRead"
+                  },
+                  "type": "array",
+                  "title": "Response Topics Api Topics Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/participants": {
+      "get": {
+        "tags": [
+          "participants"
+        ],
+        "summary": "Participants",
+        "operationId": "participants_api_participants_get",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "business",
+                    "student"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "default": "",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ParticipantRead"
+                  },
+                  "title": "Response Participants Api Participants Get"
                 }
               }
             }
@@ -1175,6 +1356,76 @@
         ],
         "title": "Missing"
       },
+      "ParticipantRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "business",
+              "student"
+            ],
+            "title": "Role"
+          },
+          "organization": {
+            "type": "string",
+            "title": "Organization"
+          },
+          "bio": {
+            "type": "string",
+            "title": "Bio"
+          },
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Interests"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "is_demo": {
+            "type": "boolean",
+            "title": "Is Demo"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "organization",
+          "bio",
+          "interests",
+          "skills",
+          "is_demo",
+          "team_id"
+        ],
+        "title": "ParticipantRead"
+      },
       "ProgressCreate": {
         "properties": {
           "stage": {
@@ -1449,6 +1700,19 @@
             "type": "boolean",
             "title": "Confirmed",
             "default": false
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
           }
         },
         "additionalProperties": false,
@@ -1515,6 +1779,28 @@
             },
             "type": "array",
             "title": "Proposals"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticipantRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_demo": {
+            "type": "boolean",
+            "title": "Is Demo",
+            "default": false
+          },
+          "work_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Work Tags"
           }
         },
         "type": "object",
@@ -1576,6 +1862,28 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticipantRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_demo": {
+            "type": "boolean",
+            "title": "Is Demo",
+            "default": false
+          },
+          "work_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Work Tags"
           }
         },
         "type": "object",
@@ -1711,6 +2019,18 @@
           "points": {
             "type": "integer",
             "title": "Points"
+          },
+          "is_demo": {
+            "type": "boolean",
+            "title": "Is Demo",
+            "default": false
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantRead"
+            },
+            "type": "array",
+            "title": "Members"
           }
         },
         "additionalProperties": false,
@@ -1721,6 +2041,24 @@
           "points"
         ],
         "title": "TeamRead"
+      },
+      "TopicRead": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "tasks_count": {
+            "type": "integer",
+            "title": "Tasks Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "tasks_count"
+        ],
+        "title": "TopicRead"
       },
       "ValidationError": {
         "properties": {

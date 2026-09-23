@@ -16,24 +16,28 @@
           <h1>Рейтинг качества бизнес-задач</h1>
         </div>
         <div class="account-area">
-          <div id="mode-label" class="status-pill" aria-live="polite">Подключение к серверу…</div>
-          <div class="account-controls">
-            <button id="team-button" class="secondary-button" type="button">Команды</button>
+          <div class="profile-picker">
+            <span id="profile-label" class="muted">Профиль</span>
+            <div class="profile-switch" role="group" aria-labelledby="profile-label">
+              <button class="profile-button is-active" type="button" data-profile="business" aria-pressed="true">Бизнес</button>
+              <button class="profile-button" type="button" data-profile="student" aria-pressed="false">Студент</button>
+            </div>
           </div>
+          <div id="mode-label" class="status-pill" aria-live="polite">Подключение к серверу…</div>
         </div>
       </header>
 
       <nav class="tabs" aria-label="Основные разделы">
-        <button class="tab is-active" type="button" data-tab="business-task" aria-selected="true">Бизнес: новая задача</button>
-        <button class="tab" type="button" data-tab="catalog" aria-selected="false">Каталог</button>
-        <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Бизнес: отклики</button>
-        <button class="tab" type="button" data-tab="team" aria-selected="false">Команда</button>
+        <button class="tab is-active" type="button" data-tab="business-task" aria-selected="true">Новая задача</button>
+        <button class="tab" type="button" data-tab="catalog" aria-selected="false" hidden>Каталог</button>
+        <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Отклики</button>
+        <button class="tab" type="button" data-tab="team" aria-selected="false" hidden>Команда</button>
       </nav>
 
       <p id="app-message" class="notice" role="status" hidden></p>
 
       <main>
-        <section id="business-task" class="tab-panel is-active" aria-label="Бизнес: новая задача">
+        <section id="business-task" class="tab-panel is-active" aria-label="Новая задача">
           <div class="wizard-shell">
             <div class="wizard-steps" aria-label="Пошаговый мастер задачи">
               <button class="wizard-step is-active" type="button" data-step="1">1. Черновик</button>
@@ -59,6 +63,10 @@
                     <option value="здравоохранение">Здравоохранение</option>
                     <option value="городские сервисы">Городские сервисы</option>
                   </select>
+                </div>
+                <div class="field-block">
+                  <label for="business-choice">Предприниматель</label>
+                  <select id="business-choice"><option value="">Без демо-профиля</option></select>
                 </div>
               </div>
 
@@ -125,38 +133,74 @@
             <h2>Каталог задач</h2>
             <span id="catalog-counter" class="muted">0 задач</span>
           </div>
-          <div class="catalog-controls">
-            <label>
-              Тема
-              <select id="catalog-topic">
-                <option value="">Все темы</option>
-                <option value="образование">Образование</option>
-                <option value="ритейл">Ритейл</option>
-                <option value="логистика">Логистика</option>
-                <option value="городские сервисы">Городские сервисы</option>
-                <option value="здравоохранение">Здравоохранение</option>
-              </select>
-            </label>
-            <label>
-              Уровень
-              <select id="catalog-level">
-                <option value="">Все уровни</option>
-                <option value="priority">Приоритетная</option>
-                <option value="ready">Готовая</option>
-                <option value="working">Рабочая</option>
-                <option value="draft">Черновик</option>
-              </select>
-            </label>
+          <div class="catalog-controls catalog-toolbar">
+            <label>Поиск<input id="catalog-search" type="search" maxlength="200" placeholder="Название или потребность"></label>
+            <button id="catalog-settings-toggle" class="secondary-button" type="button" aria-expanded="false" aria-controls="catalog-settings">Фильтры и сортировка</button>
           </div>
+          <div id="catalog-settings" class="wizard-panel" role="region" aria-label="Фильтры и сортировка каталога" hidden>
+            <div class="catalog-controls">
+              <label>Тема
+                <select id="catalog-topic">
+                  <option value="">Все темы</option>
+                  <option value="образование">Образование</option>
+                  <option value="ритейл">Ритейл</option>
+                  <option value="логистика">Логистика</option>
+                  <option value="городские сервисы">Городские сервисы</option>
+                  <option value="здравоохранение">Здравоохранение</option>
+                </select>
+              </label>
+              <label>Готовность задачи
+                <select id="catalog-level">
+                  <option value="">Все уровни</option>
+                  <option value="priority">Приоритетная</option>
+                  <option value="ready">Готовая</option>
+                  <option value="working">Рабочая</option>
+                  <option value="draft">Черновик</option>
+                </select>
+              </label>
+              <label>Заказчик<select id="catalog-owner"><option value="">Все заказчики</option></select></label>
+              <label>Тип работы
+                <select id="catalog-work-type">
+                  <option value="">Любой тип</option>
+                  <option value="веб-приложение">Веб-приложение</option>
+                  <option value="аналитика">Аналитика</option>
+                  <option value="бот">Бот</option>
+                  <option value="дизайн">Дизайн</option>
+                </select>
+              </label>
+              <label>Отклики
+                <select id="catalog-proposals">
+                  <option value="any">Любое количество</option>
+                  <option value="none">Без откликов</option>
+                  <option value="has">Есть отклики</option>
+                </select>
+              </label>
+              <label>Сортировка
+                <select id="catalog-sort">
+                  <option value="score_desc">Сначала высокий рейтинг</option>
+                  <option value="score_asc">Сначала низкий рейтинг</option>
+                  <option value="newest">Сначала новые</option>
+                  <option value="oldest">Сначала старые</option>
+                  <option value="proposals_desc">Сначала больше откликов</option>
+                </select>
+              </label>
+            </div>
+            <div class="action-row">
+              <button id="catalog-reset" class="secondary-button" type="button">Сбросить настройки</button>
+              <span class="muted">Изменения применяются автоматически</span>
+            </div>
+          </div>
+          <p id="catalog-filter-summary" class="muted" aria-live="polite">Все задачи · Сначала высокий рейтинг</p>
           <div id="catalog-list" class="task-grid"></div>
           <button id="catalog-more" class="secondary-button" type="button" hidden>Показать ещё</button>
         </section>
 
-        <section id="business-proposals" class="tab-panel" aria-label="Бизнес: отклики" hidden>
+        <section id="business-proposals" class="tab-panel" aria-label="Отклики" hidden>
           <div class="panel-header">
             <h2>Отклики команд</h2>
             <span class="muted">Решение принимает бизнес вручную. Система не назначает команды.</span>
           </div>
+          <div class="field-block"><label for="proposal-business">Предприниматель</label><select id="proposal-business"><option value="">Все заказчики</option></select></div>
           <div class="proposal-controls">
             <label for="proposal-task">Задача</label>
             <select id="proposal-task"></select>
@@ -190,6 +234,7 @@
                 <span id="recommendation-counter" class="muted">0 задач</span>
               </div>
               <div id="recommendation-list" class="task-grid"></div>
+              <div class="action-row"><button id="recommendation-more" class="secondary-button" type="button" aria-controls="recommendation-list" hidden>Показать ещё…</button></div>
 
               <div class="section-heading proposals-heading">
                 <div>
@@ -233,6 +278,16 @@
         </section>
       </main>
     </div>
+    <dialog id="participants-dialog" aria-labelledby="participants-title">
+      <div class="panel-header"><h2 id="participants-title">Участники</h2><button type="button" class="secondary-button" data-close="participants-dialog" aria-label="Закрыть участников">×</button></div>
+      <p class="muted">Демонстрационные профили: вымышленные люди и компании для знакомства с платформой.</p>
+      <div class="field-row two-columns">
+        <div class="field-block"><label for="participant-role">Роль</label><select id="participant-role"><option value="">Все участники</option><option value="business">Предприниматели</option><option value="student">Студенты</option></select></div>
+        <div class="field-block"><label for="participant-topic">Тема</label><select id="participant-topic"><option value="">Все темы</option></select></div>
+      </div>
+      <p id="participants-count" class="muted" aria-live="polite"></p>
+      <div id="participants-list" class="proposal-list"></div>
+    </dialog>
     <dialog id="team-dialog" aria-labelledby="team-title">
       <form id="team-form">
         <div class="panel-header"><h2 id="team-title">Команды</h2><button type="button" class="secondary-button" data-close="team-dialog" aria-label="Закрыть">×</button></div>

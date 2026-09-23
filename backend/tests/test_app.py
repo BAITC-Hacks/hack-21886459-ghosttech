@@ -256,19 +256,25 @@ def test_seed_idempotency_and_restart(settings):
     engine = create_db_engine(settings)
     migrate(engine)
     with Session(engine) as db, db.begin():
-        assert seed_database(db) == {"tasks": 5, "teams": 5, "proposals": 7}
+        assert seed_database(db) == {
+            "tasks": 85,
+            "teams": 25,
+            "proposals": 207,
+            "participants": 100,
+            "progress": 104,
+        }
         db.get(Task, "t1").title = "Edited title"
     with Session(engine) as db, db.begin():
-        assert seed_database(db) == {"tasks": 0, "teams": 0, "proposals": 0}
+        assert not any(seed_database(db).values())
         assert db.get(Task, "t1").title == "Edited title"
-        assert db.scalar(select(func.count()).select_from(Task)) == 5
-        assert db.scalar(select(func.count()).select_from(Team)) == 5
-        assert db.scalar(select(func.count()).select_from(Proposal)) == 7
+        assert db.scalar(select(func.count()).select_from(Task)) == 85
+        assert db.scalar(select(func.count()).select_from(Team)) == 25
+        assert db.scalar(select(func.count()).select_from(Proposal)) == 207
         assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
     assert "users" not in inspect(engine).get_table_names()
     engine.dispose()
     with TestClient(create_app(settings)) as client:
-        assert len(client.get("/api/tasks").json()) == 5
+        assert len(client.get("/api/tasks?limit=100").json()) == 85
         assert client.get("/api/tasks/t1").json()["card"]["title"] == "Edited title"
 
 
@@ -285,3 +291,111 @@ def test_migration_preserves_legacy_notes(tmp_path):
         config.attributes["connection"] = connection
         command.check(config)
     engine.dispose()
+
+
+@pytest.fixture
+def catalog_cases(client):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import Participant
+
+    rows = [
+        task(client, title="Анализ продаж", topic="ритейл", context="x" * 40),
+        task(client, title="Панель продаж", topic="ритейл", context="x" * 40, need="x" * 40),
+        task(client, title="Бот школы", topic="образование"),
+        task(client, title="Сводка продаж", topic="ритейл", context="x" * 40),
+    ]
+    task(client, confirmed=False, title="Скрытый черновик", context="x" * 40)
+    with Session(client.app.state.engine) as db, db.begin():
+        db.add(Participant(id="catalog-owner", name="Тестовый заказчик", role="business"))
+        db.flush()
+        for index, row in enumerate(rows):
+            record = db.get(Task, row["id"])
+            record.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
+            record.work_tags = [
+                ["аналитика"],
+                ["аналитика", "веб-приложение"],
+                ["бот"],
+                ["аналитика данных"],
+            ][index]
+            record.owner_id = "catalog-owner" if index in [0, 1] else None
+    for index in range(3):
+        respondent = team(client, f"Respondent {index}")
+        for row_index in range(index, 3):
+            assert (
+                client.post(
+                    f"/api/tasks/{rows[row_index]['id']}/proposals",
+                    json=proposal_payload(respondent["id"]),
+                ).status_code
+                == 201
+            )
+    return rows
+
+
+@pytest.mark.parametrize(
+    "sort, expected",
+    [
+        ("score_desc", [1, 3, 0, 2]),
+        ("score_asc", [2, 3, 0, 1]),
+        ("newest", [3, 2, 1, 0]),
+        ("oldest", [0, 1, 2, 3]),
+        ("proposals_desc", [2, 1, 0, 3]),
+    ],
+)
+def test_catalog_sorting_before_pagination(client, catalog_cases, sort, expected):
+    expected_ids = [catalog_cases[index]["id"] for index in expected]
+    whole = client.get("/api/tasks", params={"sort": sort}).json()
+    assert [row["id"] for row in whole] == expected_ids
+    paged = []
+    for offset in [0, 2]:
+        paged.extend(
+            client.get("/api/tasks", params={"sort": sort, "offset": offset, "limit": 2}).json()
+        )
+    assert [row["id"] for row in paged] == expected_ids
+    newest_retail = client.get(
+        "/api/tasks", params={"topic": "ритейл", "sort": "newest", "limit": 1}
+    ).json()
+    assert newest_retail[0]["id"] == catalog_cases[3]["id"]
+
+
+def test_combined_catalog_filters_exact_tags_and_response_counts(client, catalog_cases):
+    rows = client.get(
+        "/api/tasks",
+        params={
+            "topic": "ритейл",
+            "level": "draft",
+            "owner_id": "catalog-owner",
+            "search": "ПРОДАЖ",
+            "work_type": "аналитика",
+            "proposals": "has",
+            "sort": "oldest",
+        },
+    ).json()
+    assert [row["id"] for row in rows] == [catalog_cases[0]["id"], catalog_cases[1]["id"]]
+    assert [row["proposals_count"] for row in rows] == [1, 2]
+    without = client.get("/api/tasks", params={"proposals": "none"}).json()
+    assert [row["id"] for row in without] == [catalog_cases[3]["id"]]
+    assert (
+        client.get("/api/tasks", params={"work_type": "аналитика", "proposals": "none"}).json()
+        == []
+    )
+    assert client.get("/api/tasks", params={"work_type": "анализ"}).json() == []
+    assert client.get("/api/tasks?sort=unknown").status_code == 422
+    assert client.get("/api/tasks?proposals=unknown").status_code == 422
+
+
+def test_catalog_sort_ties_are_stable(client, catalog_cases):
+    from datetime import datetime, timezone
+
+    with Session(client.app.state.engine) as db, db.begin():
+        for row in catalog_cases:
+            record = db.get(Task, row["id"])
+            record.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            record.score = 10
+    expected = sorted(row["id"] for row in catalog_cases)
+    for sort in ["score_desc", "score_asc", "newest", "oldest"]:
+        page_ids = [
+            client.get("/api/tasks", params={"sort": sort, "offset": i, "limit": 1}).json()[0]["id"]
+            for i in range(4)
+        ]
+        assert page_ids == expected

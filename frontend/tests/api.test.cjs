@@ -52,3 +52,20 @@ test('team workspace loads server proposals with filters and pagination', async 
   }, '8000');
   assert.deepEqual(await api.getTeamProposals({ team_id: 'team1', offset: 0, limit: 100 }), [{ id: 'p1', team_id: 'team1' }]);
 });
+
+test('demo directory and catalog keep role, author and Unicode search filters', async () => {
+  const urls = [];
+  const api = client(async (url) => {
+    urls.push(url);
+    return { ok: true, status: 200, json: async () => [] };
+  }, '8000');
+  await api.getTopics();
+  await api.getParticipants({ role: 'business', offset: 0, limit: 100 });
+  await api.getTasks({ owner_id: 'demo-business-01', search: 'УЧЁТ', topic: 'образование' });
+  assert.equal(urls[0], '/api/topics');
+  assert.equal(urls[1], '/api/participants?role=business&offset=0&limit=100');
+  const query = new URLSearchParams(urls[2].split('?')[1]);
+  assert.equal(query.get('owner_id'), 'demo-business-01');
+  assert.equal(query.get('search'), 'УЧЁТ');
+  assert.equal(query.get('topic'), 'образование');
+});

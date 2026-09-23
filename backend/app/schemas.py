@@ -56,6 +56,7 @@ class CardRequest(Input):
 
 class TaskCreate(CardRequest):
     confirmed: bool = False
+    owner_id: str | None = Field(default=None, min_length=1, max_length=32)
 
     @model_validator(mode="after")
     def check_publication(self):
@@ -96,6 +97,24 @@ class Score(BaseModel):
     missing: list[Missing]
 
 
+class ParticipantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    role: Literal["business", "student"]
+    organization: str
+    bio: str
+    interests: list[str]
+    skills: list[str]
+    is_demo: bool
+    team_id: str | None
+
+
+class TopicRead(BaseModel):
+    topic: str
+    tasks_count: int
+
+
 class TaskSummary(BaseModel):
     id: str
     title: str
@@ -106,6 +125,9 @@ class TaskSummary(BaseModel):
     confirmed: bool
     proposals_count: int
     created_at: datetime
+    owner: ParticipantRead | None = None
+    is_demo: bool = False
+    work_tags: list[str] = Field(default_factory=list)
 
 
 class TeamCreate(Input):
@@ -118,6 +140,8 @@ class TeamCreate(Input):
 class TeamRead(TeamCreate):
     id: str
     points: int
+    is_demo: bool = False
+    members: list[ParticipantRead] = Field(default_factory=list)
 
 
 class ProposalCreate(Input):
@@ -150,6 +174,9 @@ class TaskRead(Score):
     created_at: datetime
     updated_at: datetime
     proposals: list[ProposalRead]
+    owner: ParticipantRead | None = None
+    is_demo: bool = False
+    work_tags: list[str] = Field(default_factory=list)
 
 
 class Decision(Input):
