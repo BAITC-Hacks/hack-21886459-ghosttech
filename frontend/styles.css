@@ -1255,6 +1255,11 @@ textarea::placeholder, input::placeholder { color: var(--text-muted); }
 [hidden] { display: none !important; }
 .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .account-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.account-controls .secondary-button { padding: 6px 12px; }
+#account-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#auth-dialog .field-block { margin-bottom: 12px; }
+#auth-dialog .field-block input, #auth-dialog .field-block select { width: 100%; }
+#open-team-button { flex-shrink: 0; }
 .notice { padding: 16px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius); background: var(--panel); }
 .notice.is-error { border-left-color: var(--danger); }
 .notice.is-error, .form-error { color: var(--rejected); }

@@ -77,21 +77,53 @@ def test_people_filters_pagination_search_and_business_view(client):
     assert client.get("/api/participants?limit=101").status_code == 422
 
 
-def test_create_task_as_demo_business_and_preserve_author_on_edit(client):
+def test_demo_profiles_are_read_only_and_new_business_owns_its_task(client):
     payload = {"card": {"title": "Проверка публикации", "topic": "услуги"}, "confirmed": True}
-    response = client.post("/api/tasks", json={**payload, "owner_id": "demo-business-07"})
-    assert response.status_code == 201, response.text
-    task = response.json()
-    assert task["is_demo"] and task["owner"]["id"] == "demo-business-07"
-    edited = client.patch(f"/api/tasks/{task['id']}", json=payload).json()
-    assert edited["owner"] == task["owner"]
-    assert (
-        client.post("/api/tasks", json={**payload, "owner_id": "demo-student-01"}).status_code
-        == 422
-    )
-    assert client.post("/api/tasks", json={**payload, "owner_id": "missing"}).status_code == 404
-    personal = client.post("/api/tasks", json=payload).json()
-    assert personal["owner"] is None and personal["is_demo"] is False
+    assert client.post("/api/tasks", json=payload).status_code == 401
+    assert client.patch("/api/tasks/demo-task-001", json=payload).status_code == 401
+    with TestClient(client.app) as business:
+        account = business.post(
+            "/api/auth/register",
+            json={
+                "email": "new-business@example.test",
+                "password": "correct-horse-battery",
+                "name": "Новый заказчик",
+                "role": "business",
+            },
+        )
+        assert account.status_code == 201, account.text
+        profile = account.json()
+        assert not profile["is_demo"] and profile["role"] == "business"
+        assert business.patch("/api/tasks/demo-task-001", json=payload).status_code == 403
+        assert (
+            business.post(
+                "/api/tasks", json={**payload, "owner_id": "demo-business-07"}
+            ).status_code
+            == 403
+        )
+        assert (
+            business.post("/api/tasks", json={**payload, "owner_id": "demo-student-01"}).status_code
+            == 403
+        )
+        response = business.post("/api/tasks", json=payload)
+        assert response.status_code == 201, response.text
+        task = response.json()
+        assert not task["is_demo"] and task["owner"]["id"] == profile["id"]
+        edited = business.patch(f"/api/tasks/{task['id']}", json=payload).json()
+        assert edited["owner"] == task["owner"]
+    with TestClient(client.app) as student:
+        account = student.post(
+            "/api/auth/register",
+            json={
+                "email": "new-student@example.test",
+                "password": "correct-horse-battery",
+                "name": "Новый студент",
+                "role": "student",
+            },
+        )
+        assert account.status_code == 201, account.text
+        assert student.post("/api/tasks", json=payload).status_code == 403
+        assert student.patch("/api/teams/demo-team-01", json={"name": "Чужая"}).status_code == 403
 
 
 def test_reseed_preserves_edits_decisions_and_earned_points(client):

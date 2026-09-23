@@ -37,6 +37,16 @@ def client(tmp_path):
     migrate(engine)
     engine.dispose()
     with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/auth/register",
+            json={
+                "email": "agents-business@example.test",
+                "password": "correct-horse-battery",
+                "name": "Agents business",
+                "role": "business",
+            },
+        )
+        assert response.status_code == 201, response.text
         yield client
 
 

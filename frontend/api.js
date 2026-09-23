@@ -6,7 +6,7 @@
     let response;
     try {
       response = await fetch(`${baseUrl}${path}`, {
-        method, credentials: 'omit', cache: 'no-store',
+        method, credentials: 'include', cache: 'no-store',
         headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -18,6 +18,8 @@
       const message = typeof payload.error?.message === 'string' ? payload.error.message
         : typeof payload.detail === 'string' ? payload.detail
         : Array.isArray(payload.detail) ? payload.detail.map((item) => `${item.loc.slice(1).join('.')}: ${item.msg}`).join('; ')
+        : response.status === 401 ? 'Войдите, чтобы продолжить.'
+        : response.status === 403 ? 'У вас нет доступа к этому действию.'
         : `Ошибка сервера (${response.status})`;
       const error = new Error(message);
       error.status = response.status;
@@ -36,6 +38,10 @@
   const id = encodeURIComponent;
   window.api = {
     USE_MOCK: false,
+    getMe: () => request('/auth/me'),
+    login: (body) => request('/auth/login', { method: 'POST', body }),
+    register: (body) => request('/auth/register', { method: 'POST', body }),
+    logout: () => request('/auth/logout', { method: 'POST', body: {} }),
     getHealth: () => request('/health'),
     getTopics: () => request('/topics'),
     getParticipants: (params) => request(`/participants${query(params)}`),

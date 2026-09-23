@@ -1,10 +1,12 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from sqlalchemy import func, or_, select, update
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app import assistant
+from app.ai_quota import reserve_ai_request
+from app.auth import optional_participant, require_business, require_student
 from app.database import Db
 from app.models import Participant, Progress, Proposal, Task, Team
 from app.schemas import (
@@ -34,6 +36,9 @@ from app.scoring import score_card
 
 router = APIRouter()
 STAGE_POINTS = {"prototype": 10, "testing": 20, "final": 30}
+Business = Annotated[Participant, Depends(require_business)]
+Student = Annotated[Participant, Depends(require_student)]
+Viewer = Annotated[Participant | None, Depends(optional_participant)]
 
 
 def find(db, model, identifier):
@@ -80,9 +85,30 @@ def proposal_read(proposal: Proposal):
     }
 
 
-def task_read(db, task: Task):
+def visible_proposals(db, task: Task, viewer: Participant | None):
+    query = (
+        select(Proposal)
+        .join(Team, Proposal.team_id == Team.id)
+        .where(Proposal.task_id == task.id)
+        .order_by(Proposal.created_at, Proposal.id)
+    )
+    if viewer is not None and task.owner_id == viewer.id and not task.is_demo:
+        return db.scalars(query).all()
+    visible = []
+    if task.is_demo:
+        visible.append(Team.is_demo.is_(True))
+    if viewer is not None and viewer.team_id:
+        visible.append(Proposal.team_id == viewer.team_id)
+    return db.scalars(query.where(or_(*visible))).all() if visible else []
+
+
+def require_task_owner(task: Task, owner: Participant):
+    if task.is_demo or task.owner_id != owner.id:
+        raise HTTPException(403, "Задача принадлежит другому заказчику")
+
+
+def task_read(db, task: Task, viewer: Participant | None = None):
     card = Card(**{field: getattr(task, field) for field in Card.model_fields})
-    proposals = select(Proposal).where(Proposal.task_id == task.id).order_by(Proposal.created_at)
     return {
         "id": task.id,
         "card": card,
@@ -93,7 +119,7 @@ def task_read(db, task: Task):
         "is_demo": task.is_demo,
         "work_tags": task.work_tags,
         **score_card(card).model_dump(),
-        "proposals": [proposal_read(p) for p in db.scalars(proposals).all()],
+        "proposals": [proposal_read(p) for p in visible_proposals(db, task, viewer)],
     }
 
 
@@ -119,12 +145,14 @@ def task_summaries(db, query):
 
 
 @router.post("/tasks/analyze", response_model=AnalyzeRead, tags=["assistant"])
-async def analyze(data: AnalyzeRequest, request: Request):
+async def analyze(data: AnalyzeRequest, request: Request, db: Db, business: Business):
+    reserve_ai_request(db, business.id, request.app.state.settings.ai_daily_limit)
     return await assistant.analyze(data, request.app.state.settings)
 
 
 @router.post("/tasks/build-card", response_model=BuildRead, tags=["assistant"])
-async def build_card(data: BuildRequest, request: Request):
+async def build_card(data: BuildRequest, request: Request, db: Db, business: Business):
+    reserve_ai_request(db, business.id, request.app.state.settings.ai_daily_limit)
     return await assistant.build_card(data, request.app.state.settings)
 
 
@@ -136,6 +164,7 @@ def score(data: CardRequest):
 @router.get("/tasks", response_model=list[TaskSummary], tags=["tasks"])
 def tasks(
     db: Db,
+    viewer: Viewer,
     topic: str = Query("", max_length=100),
     level: Level | None = None,
     offset: int = Query(0, ge=0),
@@ -148,7 +177,9 @@ def tasks(
     sort: Literal["score_desc", "score_asc", "newest", "oldest", "proposals_desc"] = "score_desc",
 ):
     query = select(Task)
-    if not include_drafts:
+    if include_drafts and viewer is not None:
+        query = query.where(or_(Task.confirmed.is_(True), Task.owner_id == viewer.id))
+    else:
         query = query.where(Task.confirmed.is_(True))
     if topic:
         query = query.where(Task.topic == topic)
@@ -189,34 +220,36 @@ def tasks(
 
 
 @router.post("/tasks", response_model=TaskRead, status_code=201, tags=["tasks"])
-def create_task(data: TaskCreate, db: Db):
-    owner = find(db, Participant, data.owner_id) if data.owner_id else None
-    if owner and owner.role != "business":
-        raise HTTPException(422, "Автором задачи может быть только предприниматель")
+def create_task(data: TaskCreate, db: Db, owner: Business):
+    if data.owner_id and data.owner_id != owner.id:
+        raise HTTPException(403, "Нельзя создать задачу от имени другого заказчика")
     score = score_card(data.card)
     task = Task(
         **data.card.model_dump(),
         confirmed=data.confirmed,
         score=score.score,
         level=score.level,
-        owner_id=data.owner_id,
-        is_demo=bool(owner and owner.is_demo),
+        owner_id=owner.id,
+        is_demo=False,
     )
     db.add(task)
     db.commit()
     db.refresh(task)
-    return task_read(db, task)
+    return task_read(db, task, owner)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskRead, tags=["tasks"])
-def get_task(task_id: str, db: Db):
+def get_task(task_id: str, db: Db, viewer: Viewer):
     task = find(db, Task, task_id)
-    return task_read(db, task)
+    if not task.confirmed and (viewer is None or task.owner_id != viewer.id):
+        raise HTTPException(404, "Запись не найдена")
+    return task_read(db, task, viewer)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead, tags=["tasks"])
-def update_task(task_id: str, data: TaskUpdate, db: Db):
+def update_task(task_id: str, data: TaskUpdate, db: Db, owner: Business):
     task = find(db, Task, task_id)
+    require_task_owner(task, owner)
     if data.card is not None:
         for key, value in data.card.model_dump().items():
             setattr(task, key, value)
@@ -229,7 +262,7 @@ def update_task(task_id: str, data: TaskUpdate, db: Db):
         raise HTTPException(422, "Для публикации заполните название и тему")
     db.commit()
     db.refresh(task)
-    return task_read(db, task)
+    return task_read(db, task, owner)
 
 
 @router.get("/topics", response_model=list[TopicRead], tags=["tasks"])
@@ -274,16 +307,22 @@ def teams(db: Db, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=
 
 
 @router.post("/teams", response_model=TeamRead, status_code=201, tags=["teams"])
-def create_team(data: TeamCreate, db: Db):
+def create_team(data: TeamCreate, db: Db, student: Student):
+    if student.team_id is not None:
+        raise HTTPException(409, "Вы уже состоите в команде")
     team = Team(**data.model_dump())
     db.add(team)
+    db.flush()
+    student.team_id = team.id
     db.commit()
     return team_read(db, team)
 
 
 @router.patch("/teams/{team_id}", response_model=TeamRead, tags=["teams"])
-def update_team(team_id: str, data: TeamCreate, db: Db):
+def update_team(team_id: str, data: TeamCreate, db: Db, student: Student):
     team = find(db, Team, team_id)
+    if team.is_demo or student.team_id != team.id:
+        raise HTTPException(403, "Команда принадлежит другим участникам")
     for key, value in data.model_dump().items():
         setattr(team, key, value)
     db.commit()
@@ -293,9 +332,17 @@ def update_team(team_id: str, data: TeamCreate, db: Db):
 @router.post(
     "/tasks/{task_id}/proposals", response_model=ProposalRead, status_code=201, tags=["proposals"]
 )
-def create_proposal(task_id: str, data: ProposalCreate, db: Db):
+def create_proposal(task_id: str, data: ProposalCreate, db: Db, student: Student):
     task = find(db, Task, task_id)
-    find(db, Team, data.team_id)
+    if task.is_demo:
+        raise HTTPException(403, "Демозадача доступна только для просмотра")
+    if task.owner_id is None:
+        raise HTTPException(403, "Задача без действующего заказчика доступна только для просмотра")
+    if student.team_id is None or data.team_id != student.team_id:
+        raise HTTPException(403, "Отклик можно отправить только от своей команды")
+    team = find(db, Team, data.team_id)
+    if team.is_demo:
+        raise HTTPException(403, "Демокоманда доступна только для просмотра")
     if not task.confirmed:
         raise HTTPException(409, "Задача ещё не опубликована")
     proposal = Proposal(**data.model_dump(), task_id=task.id)
@@ -310,24 +357,33 @@ def create_proposal(task_id: str, data: ProposalCreate, db: Db):
 
 
 @router.get("/tasks/{task_id}/proposals", response_model=list[ProposalRead], tags=["proposals"])
-def get_proposals(task_id: str, db: Db):
-    find(db, Task, task_id)
-    return [
-        proposal_read(p)
-        for p in db.scalars(
-            select(Proposal).where(Proposal.task_id == task_id).order_by(Proposal.created_at)
-        )
-    ]
+def get_proposals(task_id: str, db: Db, viewer: Viewer):
+    task = find(db, Task, task_id)
+    if not task.confirmed and (viewer is None or task.owner_id != viewer.id):
+        raise HTTPException(404, "Запись не найдена")
+    return [proposal_read(p) for p in visible_proposals(db, task, viewer)]
 
 
 @router.get("/proposals", response_model=list[ProposalRead], tags=["proposals"])
 def list_proposals(
     db: Db,
+    viewer: Viewer,
     team_id: str = Query("", max_length=32),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    query = select(Proposal)
+    query = (
+        select(Proposal)
+        .join(Task, Proposal.task_id == Task.id)
+        .join(Team, Proposal.team_id == Team.id)
+    )
+    allowed = [and_(Task.is_demo.is_(True), Team.is_demo.is_(True), Task.confirmed.is_(True))]
+    if viewer is not None:
+        if viewer.role == "business":
+            allowed.append(and_(Task.owner_id == viewer.id, Task.is_demo.is_(False)))
+        elif viewer.team_id:
+            allowed.append(Proposal.team_id == viewer.team_id)
+    query = query.where(or_(*allowed))
     if team_id:
         find(db, Team, team_id)
         query = query.where(Proposal.team_id == team_id)
@@ -340,8 +396,9 @@ def list_proposals(
 
 
 @router.patch("/proposals/{proposal_id}/decision", response_model=ProposalRead, tags=["proposals"])
-def decide(proposal_id: str, data: Decision, db: Db):
+def decide(proposal_id: str, data: Decision, db: Db, owner: Business):
     proposal = find(db, Proposal, proposal_id)
+    require_task_owner(find(db, Task, proposal.task_id), owner)
     result = db.execute(
         update(Proposal)
         .where(Proposal.id == proposal_id, Proposal.status == "pending")
@@ -360,8 +417,9 @@ def decide(proposal_id: str, data: Decision, db: Db):
     status_code=201,
     tags=["proposals"],
 )
-def progress(proposal_id: str, data: ProgressCreate, db: Db):
+def progress(proposal_id: str, data: ProgressCreate, db: Db, owner: Business):
     proposal = find(db, Proposal, proposal_id)
+    require_task_owner(find(db, Task, proposal.task_id), owner)
     if proposal.status != "accepted":
         raise HTTPException(409, "Этап можно подтвердить только у принятого отклика")
     db.add(Progress(proposal_id=proposal_id, stage=data.stage, points=STAGE_POINTS[data.stage]))

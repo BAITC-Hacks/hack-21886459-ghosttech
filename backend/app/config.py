@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     openai_model: str = Field(default="gpt-5.4-mini", min_length=1)
     ai_timeout_seconds: float = Field(default=60, gt=0, le=180)
+    ai_daily_limit: int = Field(default=20, ge=1, le=1000)
 
     @property
     def assistant_mode(self) -> Literal["openai", "demo"]:

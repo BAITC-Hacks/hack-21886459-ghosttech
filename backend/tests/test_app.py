@@ -31,7 +31,31 @@ def settings(tmp_path):
 @pytest.fixture
 def client(settings):
     with TestClient(create_app(settings)) as client:
+        register(client, "business@example.test", "business")
         yield client
+
+
+@pytest.fixture
+def student_client(client):
+    with TestClient(client.app) as student:
+        register(student, "student@example.test", "student")
+        yield student
+
+
+@pytest.fixture
+def second_student_client(client):
+    with TestClient(client.app) as student:
+        register(student, "second-student@example.test", "student")
+        yield student
+
+
+def register(client, email, role):
+    response = client.post(
+        "/api/auth/register",
+        json={"email": email, "password": "correct-horse-battery", "name": email, "role": role},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def task(client, confirmed=True, **fields):
@@ -93,18 +117,21 @@ def test_catalog_filters_publication_and_update(client):
     assert client.patch(f"/api/tasks/{low['id']}", json={}).status_code == 422
 
 
-def test_proposals_decisions_and_points(client):
-    business_task, working_team = task(client), team(client)
+def test_proposals_decisions_and_points(client, student_client):
+    business_task, working_team = task(client), team(student_client)
     url = f"/api/tasks/{business_task['id']}/proposals"
     payload = proposal_payload(working_team["id"])
-    assert client.post(url, json=payload | {"team_id": "missing"}).status_code == 404
+    assert student_client.post(url, json=payload | {"team_id": "missing"}).status_code == 403
     assert (
-        client.post(url, json=payload | {"prototype_url": "javascript:alert(1)"}).status_code == 422
+        student_client.post(
+            url, json=payload | {"prototype_url": "javascript:alert(1)"}
+        ).status_code
+        == 422
     )
-    response = client.post(url, json=payload)
+    response = student_client.post(url, json=payload)
     assert response.status_code == 201, response.text
     proposal = response.json()
-    assert client.post(url, json=payload).status_code == 409
+    assert student_client.post(url, json=payload).status_code == 409
     assert client.get(url).json()[0]["id"] == proposal["id"]
     assert client.get("/api/tasks").json()[0]["proposals_count"] == 1
     decision = f"/api/proposals/{proposal['id']}/decision"
@@ -125,13 +152,13 @@ def test_proposals_decisions_and_points(client):
         assert db.scalar(select(func.count()).select_from(Progress)) == 3
 
 
-def test_draft_and_rejected_proposals_cannot_progress(client):
-    draft, working_team = task(client, confirmed=False), team(client)
+def test_draft_and_rejected_proposals_cannot_progress(client, student_client):
+    draft, working_team = task(client, confirmed=False), team(student_client)
     url = f"/api/tasks/{draft['id']}/proposals"
     payload = proposal_payload(working_team["id"])
-    assert client.post(url, json=payload).status_code == 409
+    assert student_client.post(url, json=payload).status_code == 409
     client.patch(f"/api/tasks/{draft['id']}", json={"confirmed": True})
-    proposal = client.post(url, json=payload).json()
+    proposal = student_client.post(url, json=payload).json()
     client.patch(f"/api/proposals/{proposal['id']}/decision", json={"decision": "rejected"})
     assert (
         client.post(
@@ -141,9 +168,9 @@ def test_draft_and_rejected_proposals_cannot_progress(client):
     )
 
 
-def test_concurrent_stage_awards_only_once(client):
-    created, working_team = task(client), team(client)
-    proposal = client.post(
+def test_concurrent_stage_awards_only_once(client, student_client):
+    created, working_team = task(client), team(student_client)
+    proposal = student_client.post(
         f"/api/tasks/{created['id']}/proposals", json=proposal_payload(working_team["id"])
     ).json()
     client.patch(f"/api/proposals/{proposal['id']}/decision", json={"decision": "accepted"})
@@ -156,23 +183,29 @@ def test_concurrent_stage_awards_only_once(client):
     assert client.get("/api/teams").json()[0]["points"] == 10
 
 
-def test_team_management_and_validation(client):
-    created = team(client)
-    response = client.patch(f"/api/teams/{created['id']}", json={"name": "New", "tech": ["Python"]})
+def test_team_management_and_validation(student_client):
+    assert student_client.post("/api/teams", json={"name": "X", "points": 100}).status_code == 422
+    assert student_client.post("/api/teams", json={"name": "   "}).status_code == 422
+    created = team(student_client)
+    response = student_client.patch(
+        f"/api/teams/{created['id']}", json={"name": "New", "tech": ["Python"]}
+    )
     assert response.json()["name"] == "New"
-    assert client.post("/api/teams", json={"name": "X", "points": 100}).status_code == 422
-    assert client.post("/api/teams", json={"name": "   "}).status_code == 422
-    assert client.patch("/api/teams/missing", json={"name": "X"}).status_code == 404
+    assert student_client.patch("/api/teams/missing", json={"name": "X"}).status_code == 404
 
 
-def test_team_proposals_filter_pagination_and_progress(client):
-    first, second = team(client, "First"), team(client, "Second")
+def test_team_proposals_filter_pagination_and_progress(
+    client, student_client, second_student_client
+):
+    first, second = team(student_client, "First"), team(second_student_client, "Second")
     task_a, task_b = task(client), task(client)
-    proposal_a = client.post(
+    proposal_a = student_client.post(
         f"/api/tasks/{task_a['id']}/proposals", json=proposal_payload(first["id"])
     ).json()
-    client.post(f"/api/tasks/{task_b['id']}/proposals", json=proposal_payload(first["id"]))
-    client.post(f"/api/tasks/{task_a['id']}/proposals", json=proposal_payload(second["id"]))
+    student_client.post(f"/api/tasks/{task_b['id']}/proposals", json=proposal_payload(first["id"]))
+    second_student_client.post(
+        f"/api/tasks/{task_a['id']}/proposals", json=proposal_payload(second["id"])
+    )
     client.patch(f"/api/proposals/{proposal_a['id']}/decision", json={"decision": "accepted"})
     client.post(f"/api/proposals/{proposal_a['id']}/progress", json={"stage": "prototype"})
     rows = client.get("/api/proposals", params={"team_id": first["id"]}).json()
@@ -221,15 +254,19 @@ def test_assistant_scoring_and_boundaries(client):
     assert client.post("/api/tasks/score", json={"card": built["card"]}).status_code == 200
 
 
-def test_no_auth_cors_static_files_and_health(client):
+def test_auth_cors_static_files_and_health(client):
     assert client.get("/api/health").json()["database"] == "sqlite"
     for asset in ["/", "/app.js", "/api.js", "/styles.css", "/static/styles.css"]:
         assert client.get(asset).status_code == 200
     assert client.get("/.env").status_code == 404
-    assert client.get("/api/auth/me").status_code == 404
-    assert client.post("/api/auth/login", json={}).status_code == 404
+    assert client.get("/api/auth/me").status_code == 200
+    assert client.post("/api/auth/login", json={}).status_code == 422
+    with TestClient(client.app) as anonymous:
+        assert anonymous.get("/api/auth/me").status_code == 401
+        assert anonymous.post("/api/tasks", json={"card": {}}).status_code == 401
     schema = client.get("/openapi.json").json()
-    assert "securitySchemes" not in schema["components"]
+    assert "/api/auth/register" in schema["paths"]
+    assert "/api/auth/me" in schema["paths"]
     response = client.options(
         "/api/tasks",
         headers={
@@ -320,15 +357,17 @@ def catalog_cases(client):
             ][index]
             record.owner_id = "catalog-owner" if index in [0, 1] else None
     for index in range(3):
-        respondent = team(client, f"Respondent {index}")
-        for row_index in range(index, 3):
-            assert (
-                client.post(
-                    f"/api/tasks/{rows[row_index]['id']}/proposals",
-                    json=proposal_payload(respondent["id"]),
-                ).status_code
-                == 201
-            )
+        with TestClient(client.app) as respondent_client:
+            register(respondent_client, f"respondent-{index}@example.test", "student")
+            respondent = team(respondent_client, f"Respondent {index}")
+            for row_index in range(index, 3):
+                assert (
+                    respondent_client.post(
+                        f"/api/tasks/{rows[row_index]['id']}/proposals",
+                        json=proposal_payload(respondent["id"]),
+                    ).status_code
+                    == 201
+                )
     return rows
 
 

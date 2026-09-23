@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 
-from app import routes
+from app import auth, routes
 from app.config import ROOT_DIR, Settings
 from app.database import Db, create_db_engine
 
@@ -30,10 +30,45 @@ def create_app(settings: Settings | None = None):
         description="Бизнес-задачи, рейтинг, команды, отклики и этапы работы.",
     )
     app.state.settings, app.state.engine = settings, engine
+
+    @app.middleware("http")
+    async def validate_api_request(request: Request, call_next):
+        if request.url.path.startswith("/api/") and request.method in {
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE",
+        }:
+            origin = request.headers.get("origin")
+            same_origin = f"{request.url.scheme}://{request.url.netloc}"
+            allowed_origins = {
+                same_origin,
+                *(value.rstrip("/") for value in settings.frontend_origins),
+            }
+            if origin is not None and origin not in allowed_origins:
+                return JSONResponse(status_code=403, content={"detail": "Origin is not allowed"})
+
+            expects_json = request.method in {"POST", "PATCH", "PUT"} and not (
+                request.method == "POST" and request.url.path == "/api/auth/logout"
+            )
+            if expects_json:
+                content_type = (
+                    request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                )
+                is_json = content_type == "application/json" or (
+                    content_type.startswith("application/") and content_type.endswith("+json")
+                )
+                if not is_json:
+                    return JSONResponse(
+                        status_code=415, content={"detail": "JSON Content-Type is required"}
+                    )
+
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.frontend_origins,
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["Content-Type"],
     )
@@ -43,6 +78,9 @@ def create_app(settings: Settings | None = None):
         response = await call_next(request)
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
     api = APIRouter(prefix="/api")
@@ -57,6 +95,7 @@ def create_app(settings: Settings | None = None):
             "ai_configured": bool(settings.openai_api_key.get_secret_value().strip()),
         }
 
+    api.include_router(auth.router)
     api.include_router(routes.router)
     app.include_router(api)
 

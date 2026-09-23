@@ -23,6 +23,11 @@
               <button class="profile-button" type="button" data-profile="student" aria-pressed="false">Студент</button>
             </div>
           </div>
+          <div class="account-controls">
+            <span id="account-name" class="muted" hidden></span>
+            <button id="auth-open" class="secondary-button" type="button">Войти</button>
+            <button id="auth-logout" class="secondary-button" type="button" hidden>Выйти</button>
+          </div>
           <div id="mode-label" class="status-pill" aria-live="polite">Подключение к серверу…</div>
         </div>
       </header>
@@ -66,7 +71,7 @@
                 </div>
                 <div class="field-block">
                   <label for="business-choice">Предприниматель</label>
-                  <select id="business-choice"><option value="">Без демо-профиля</option></select>
+                  <select id="business-choice" disabled><option value="">Войдите как бизнес</option></select>
                 </div>
               </div>
 
@@ -217,7 +222,7 @@
             <h2>Отклики команд</h2>
             <span class="muted">Решение принимает бизнес вручную. Система не назначает команды.</span>
           </div>
-          <div class="field-block"><label for="proposal-business">Предприниматель</label><select id="proposal-business"><option value="">Все заказчики</option></select></div>
+          <div class="field-block"><label for="proposal-business">Предприниматель</label><select id="proposal-business" disabled><option value="">Войдите как бизнес</option></select></div>
           <div class="proposal-controls">
             <label for="proposal-task">Задача</label>
             <select id="proposal-task"></select>
@@ -239,6 +244,7 @@
                   Команда
                   <select id="team-select" aria-label="Выберите команду"></select>
                 </label>
+                <button id="open-team-button" class="secondary-button" type="button">Создать команду</button>
               </div>
 
               <div class="team-profile" id="team-profile"></div>
@@ -274,7 +280,7 @@
               <form id="response-form" class="response-form" hidden>
                 <h4>Откликнуться</h4>
                 <label for="response-team">От команды</label>
-                <select id="response-team" required></select>
+                <select id="response-team" disabled></select>
                 <label for="response-idea">Идея решения</label>
                 <textarea id="response-idea" required maxlength="5000" placeholder="Коротко опишите, что предложит команда"></textarea>
                 <small id="response-idea-error" class="field-error"></small>
@@ -306,10 +312,21 @@
       <div id="participants-list" class="proposal-list"></div>
     </dialog>
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="auth-dialog" aria-labelledby="auth-dialog-title">
+      <form id="auth-form">
+        <div class="panel-header"><h2 id="auth-dialog-title">Вход</h2><button type="button" class="secondary-button" data-close="auth-dialog" aria-label="Закрыть">×</button></div>
+        <p class="muted">Войдите, чтобы публиковать задачи и работать с командой.</p>
+        <div id="auth-name-row" class="field-block" hidden><label for="auth-name">Имя</label><input id="auth-name" name="name" autocomplete="name" maxlength="100"></div>
+        <div id="auth-role-row" class="field-block" hidden><label for="auth-role">Профиль</label><select id="auth-role"><option value="business">Бизнес</option><option value="student">Студент</option></select></div>
+        <div class="field-block"><label for="auth-email">Электронная почта</label><input id="auth-email" name="email" type="email" autocomplete="email" required maxlength="254"></div>
+        <div class="field-block"><label for="auth-password">Пароль</label><input id="auth-password" name="password" type="password" autocomplete="current-password" required></div>
+        <p id="auth-error" class="form-error" role="alert"></p>
+        <div class="action-row"><button id="auth-submit" class="primary-button" type="submit">Войти</button><button id="auth-toggle" class="secondary-button" type="button">Зарегистрироваться</button></div>
+      </form>
+    </dialog>
     <dialog id="team-dialog" aria-labelledby="team-dialog-title">
       <form id="team-form">
         <div class="panel-header"><h2 id="team-dialog-title">Команды</h2><button type="button" class="secondary-button" data-close="team-dialog" aria-label="Закрыть">×</button></div>
-        <div class="field-block"><label for="team-choice">Выберите команду или создайте новую</label><select id="team-choice"><option value="">Новая команда</option></select></div>
         <div class="field-block"><label for="team-dialog-name">Название</label><input id="team-dialog-name" name="name" required maxlength="100"></div>
         <div class="field-block"><label for="team-interests">Интересы, через запятую</label><input id="team-interests" name="interests" maxlength="1000"></div>
         <div class="field-block"><label for="team-skills">Навыки, через запятую</label><input id="team-skills" name="skills" maxlength="1000"></div>

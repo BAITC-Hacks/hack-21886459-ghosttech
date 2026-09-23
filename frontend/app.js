@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const completedSteps = new Set();
   const profileTabs = { business: ['business-task', 'business-proposals'], student: ['catalog', 'team'] };
   const lastProfileTab = { business: 'business-task', student: 'catalog' };
-  let activeProfile = 'business';
+  let activeProfile = 'student', currentUser = null, authMode = 'login';
   const readiness = {
     draft: 'Потребуются уточнения у бизнеса', working: 'Возможны уточнения',
     ready: 'Можно начинать без уточнений', priority: 'Полностью готова к работе',
@@ -42,12 +42,89 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#app-message').hidden = !message;
     $('#app-message').classList.toggle('is-error', isError);
   }
+  function syncAccount() {
+    const business = currentUser?.role === 'business' ? currentUser : null;
+    const label = business ? `${business.name}${business.organization ? ` · ${business.organization}` : ''}` : 'Войдите как бизнес';
+    for (const id of ['business-choice', 'proposal-business']) {
+      const select = $(`#${id}`);
+      select.innerHTML = `<option value="${business ? escape(business.id) : ''}">${escape(label)}</option>`;
+      select.disabled = true;
+    }
+    $('#account-name').textContent = currentUser ? `${currentUser.name} · ${currentUser.role === 'business' ? 'Бизнес' : 'Студент'}` : '';
+    $('#account-name').hidden = !currentUser;
+    $('#auth-open').hidden = Boolean(currentUser);
+    $('#auth-logout').hidden = !currentUser;
+    document.querySelectorAll('[data-profile]').forEach((button) => {
+      button.hidden = Boolean(currentUser && button.dataset.profile !== currentUser.role);
+    });
+  }
+  function renderAuthMode() {
+    const registering = authMode === 'register';
+    $('#auth-dialog-title').textContent = registering ? 'Регистрация' : 'Вход';
+    $('#auth-name-row').hidden = !registering;
+    $('#auth-role-row').hidden = !registering;
+    $('#auth-name').required = registering;
+    $('#auth-password').autocomplete = registering ? 'new-password' : 'current-password';
+    $('#auth-submit').textContent = registering ? 'Зарегистрироваться' : 'Войти';
+    $('#auth-toggle').textContent = registering ? 'Уже есть аккаунт? Войти' : 'Зарегистрироваться';
+    $('#auth-error').textContent = '';
+  }
+  function openAuth(mode = 'login') {
+    authMode = mode;
+    $('#auth-role').value = activeProfile;
+    renderAuthMode();
+    if (!$('#auth-dialog').open) $('#auth-dialog').showModal();
+  }
+  function requireRole(role) {
+    if (!currentUser) {
+      notify('Войдите, чтобы сохранить изменения.', true);
+      openAuth();
+      return false;
+    }
+    if (currentUser.role !== role || currentUser.is_demo) {
+      notify('У этого профиля нет доступа к действию.', true);
+      return false;
+    }
+    return true;
+  }
+  async function setCurrentUser(user) {
+    const previousId = currentUser?.id;
+    currentUser = user;
+    publishedId = null;
+    selectedTask = null;
+    selectedTeamId = user?.team_id || null;
+    availableTeams = [];
+    teamProposals = [];
+    if (previousId && previousId !== user?.id) {
+      card = Object.fromEntries(fields.map(([key]) => [key, '']));
+      questions = []; initialScore = null;
+      completedSteps.clear(); unlockedStep = 1;
+      $('#draft-text').value = ''; $('#confirm-check').checked = false;
+      renderFields(); setStep(1); updatePublish();
+    }
+    syncAccount();
+    await selectProfile(user?.role || 'student');
+  }
   async function run(button, action, errorTarget) {
     if (button) button.disabled = true;
     try { await action(); }
     catch (error) {
-      if (errorTarget) errorTarget.textContent = error.message;
-      else notify(error.message, true);
+      if (error.status === 401 && currentUser) {
+        currentUser = null;
+        publishedId = null;
+        selectedTeamId = null;
+        selectedTask = null;
+        card = Object.fromEntries(fields.map(([key]) => [key, '']));
+        questions = []; initialScore = null;
+        completedSteps.clear(); unlockedStep = 1;
+        $('#draft-text').value = ''; $('#confirm-check').checked = false;
+        renderFields(); setStep(1); updatePublish();
+        syncAccount();
+      }
+      const message = error.status === 401 ? 'Войдите, чтобы продолжить.'
+        : error.status === 403 ? 'У вас нет доступа к этому действию.' : error.message;
+      if (errorTarget) errorTarget.textContent = message;
+      else notify(message, true);
     } finally {
       if (button) button.disabled = false;
       if (button === $('#publish-button')) updatePublish();
@@ -56,6 +133,32 @@ document.addEventListener('DOMContentLoaded', () => {
   function onClick(selector, action) {
     $(selector).addEventListener('click', (event) => run(event.currentTarget, action));
   }
+  $('#auth-open').addEventListener('click', () => openAuth());
+  $('#auth-toggle').addEventListener('click', () => {
+    authMode = authMode === 'login' ? 'register' : 'login';
+    renderAuthMode();
+  });
+  $('#auth-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    run($('#auth-submit'), async () => {
+      const body = { email: $('#auth-email').value.trim(), password: $('#auth-password').value };
+      if (authMode === 'register') {
+        body.name = $('#auth-name').value.trim();
+        body.role = $('#auth-role').value;
+      }
+      const user = await (authMode === 'register' ? api.register(body) : api.login(body));
+      $('#auth-password').value = '';
+      $('#auth-dialog').close();
+      await setCurrentUser(user);
+      await loadParticipants();
+      notify(`Вы вошли как ${user.role === 'business' ? 'предприниматель' : 'студент'}.`);
+    }, $('#auth-error'));
+  });
+  onClick('#auth-logout', async () => {
+    await api.logout();
+    await setCurrentUser(null);
+    notify('Вы вышли из аккаунта. Каталог доступен для просмотра.');
+  });
   async function withAssistant(buttonId, label, action) {
     const button = $(buttonId), previous = button.textContent;
     const controls = [$('#analyze-button'), $('#build-card-button'), $('#sample-button'), $('#draft-text'), $('#task-topic'), $('#business-choice'), $('#confirm-check'), $('#publish-button'), ...document.querySelectorAll('#question-list textarea, #card-form textarea, [data-tab], [data-profile], .wizard-step')];
@@ -90,11 +193,10 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadParticipants() {
     participants = await allPages(api.getParticipants);
     const businesses = participants.filter((person) => person.role === 'business');
-    for (const [id, placeholder] of [['business-choice', 'Без демо-профиля'], ['proposal-business', 'Все заказчики'], ['catalog-owner', 'Все заказчики']]) {
-      const select = $(`#${id}`), previous = select.value;
-      select.innerHTML = `<option value="">${placeholder}</option>` + businesses.map((person) => `<option value="${escape(person.id)}">${escape(person.name)} · ${escape(person.organization)}${person.is_demo ? ' · Демо' : ''}</option>`).join('');
-      if (businesses.some((person) => person.id === previous)) select.value = previous;
-    }
+    const select = $('#catalog-owner'), previous = select.value;
+    select.innerHTML = '<option value="">Все заказчики</option>' + businesses.map((person) => `<option value="${escape(person.id)}">${escape(person.name)} · ${escape(person.organization)}${person.is_demo ? ' · Демо' : ''}</option>`).join('');
+    if (businesses.some((person) => person.id === previous)) select.value = previous;
+    syncAccount();
   }
   function renderParticipants() {
     const role = $('#participant-role').value, topic = $('#participant-topic').value;
@@ -111,43 +213,49 @@ document.addEventListener('DOMContentLoaded', () => {
       $('#participants-dialog').close();
       if (person.role === 'business') {
         resetCatalogFilters(); $('#catalog-owner').value = person.id;
-        if (!publishedId) $('#business-choice').value = person.id; $('#proposal-business').value = person.id;
+        if (currentUser?.role === 'business') { notify('Каталог открыт в профиле студента или без входа.', true); return; }
         await showTab('catalog');
-      } else { selectedTeamId = person.team_id; await showTab('team'); }
+      } else {
+        if (currentUser) { notify('Команда другого участника доступна только в публичном каталоге.', true); return; }
+        selectedTeamId = person.team_id; await showTab('team');
+      }
     });
   });
-  $('#business-choice').addEventListener('change', () => { $('#proposal-business').value = $('#business-choice').value; });
-  $('#proposal-business').addEventListener('change', () => run(null, loadProposals));
 
   function fillTeamForm() {
-    myTeam = availableTeams.find((team) => team.id === $('#team-choice').value) || null;
+    myTeam = availableTeams.find((team) => team.id === currentUser?.team_id) || null;
     for (const key of ['name', 'interests', 'skills', 'tech']) {
       $(key === 'name' ? '#team-dialog-name' : `#team-${key}`).value = key === 'name' ? myTeam?.name || '' : (myTeam?.[key] || []).join(', ');
     }
   }
   async function openTeam() {
-    if (activeProfile !== 'student') return;
+    if (!requireRole('student')) return;
     availableTeams = await allTeams();
     if (activeProfile !== 'student') return;
-    $('#team-choice').innerHTML = '<option value="">Новая команда</option>' + availableTeams.map((team) => `<option value="${escape(team.id)}">${escape(team.name)}</option>`).join('');
     fillTeamForm();
+    if (myTeam?.is_demo) { notify('Демо-команду нельзя редактировать.', true); return; }
+    $('#team-dialog-title').textContent = myTeam ? 'Моя команда' : 'Новая команда';
     $('#team-error').textContent = ''; $('#team-dialog').showModal();
   }
-  $('#team-choice').addEventListener('change', fillTeamForm);
+  onClick('#open-team-button', openTeam);
   $('#team-form').addEventListener('submit', (event) => {
     event.preventDefault(); $('#team-error').textContent = '';
     run(event.currentTarget.querySelector('[type="submit"]'), async () => {
+      if (!requireRole('student')) return;
+      if (myTeam?.is_demo) throw new Error('Демо-команду нельзя редактировать.');
       const payload = { name: $('#team-dialog-name').value };
       for (const key of ['interests', 'skills', 'tech']) payload[key] = $(`#team-${key}`).value.split(',').map((v) => v.trim()).filter(Boolean);
-      myTeam = await (myTeam ? api.updateTeam(myTeam.id, payload) : api.createTeam(payload));
-      selectedTeamId = myTeam.id;
+      myTeam = await (currentUser.team_id ? api.updateTeam(currentUser.team_id, payload) : api.createTeam(payload));
+      currentUser = await api.getMe();
+      selectedTeamId = currentUser.team_id;
+      syncAccount();
       $('#team-dialog').close(); notify('Команда сохранена. Теперь можно отправить отклик в каталоге.');
       if (!$('#team').hidden) await renderTeam();
     }, $('#team-error'));
   });
 
   async function selectProfile(profile) {
-    if (!Object.hasOwn(profileTabs, profile) || assistantBusy) return;
+    if (!Object.hasOwn(profileTabs, profile) || assistantBusy || (currentUser && profile !== currentUser.role)) return;
     activeProfile = profile;
     try { localStorage.setItem('ghosttech.profile', profile); } catch { /* Storage can be unavailable. */ }
     document.querySelectorAll('[data-profile]').forEach((button) => {
@@ -249,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   onClick('#sample-button', async () => {
     $('#draft-text').value = 'Нужно вести учёт посещаемости кружков. Сейчас всё в бумажном журнале и листках. Хочется, чтобы родители видели, кто приходил, а руководитель видел статистику по группам.';
-    $('#task-topic').value = 'образование'; publishedId = null; questions = []; $('#business-choice').disabled = false;
+    $('#task-topic').value = 'образование'; publishedId = null; questions = [];
     completedSteps.clear(); unlockedStep = 1; setStep(1);
     card = Object.fromEntries(fields.map(([key]) => [key, ''])); renderFields();
     $('#confirm-check').checked = false; $('#publish-message').textContent = ''; updatePublish();
@@ -260,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await refreshScore();
   });
   onClick('#analyze-button', () => withAssistant('#analyze-button', 'Анализируем…', async () => {
+    if (!requireRole('business')) return;
     $('#analyze-status').textContent = 'Разбираем описание и готовим вопросы по вашей задаче…';
     const result = await api.analyzeTask({ draft_text: $('#draft-text').value, topic: $('#task-topic').value });
     questions = result.questions;
@@ -274,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setStep(2); notify('');
   }));
   onClick('#build-card-button', () => withAssistant('#build-card-button', 'Собираем карточку…', async () => {
+    if (!requireRole('business')) return;
     $('#build-status').textContent = 'Собираем карточку из описания и ваших ответов…';
     const result = await api.buildCard({ draft_text: $('#draft-text').value, topic: $('#task-topic').value,
       answers: questions.map((q) => ({ question_id: q.id, field: q.field, question: q.question, answer: document.getElementById(`answer-${q.id}`).value })) });
@@ -300,11 +410,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#task-topic').addEventListener('change', invalidateDraft);
   $('#confirm-check').addEventListener('change', updatePublish);
   onClick('#publish-button', async () => {
+    if (!requireRole('business')) return;
     if (!$('#confirm-check').checked || !card.title.trim() || !card.topic.trim()) return;
     const payload = { card: { ...card }, confirmed: $('#confirm-check').checked };
-    if (!publishedId) payload.owner_id = $('#business-choice').value || null;
+    if (!publishedId) payload.owner_id = currentUser.id;
     const task = await (publishedId ? api.updateTask(publishedId, payload) : api.createTask(payload));
-    publishedId = task.id; $('#business-choice').disabled = true;
+    publishedId = task.id;
     await loadTopics();
     completedSteps.add(4); setStep(4);
     $('#publish-message').textContent = 'Задача сохранена и опубликована в каталоге.';
@@ -342,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
       $('#catalog-counter').textContent = `Показано: ${catalogTasks.length} ${plural(catalogTasks.length, ['задача', 'задачи', 'задач'])}`;
       $('#catalog-more').hidden = tasks.length < 50;
       $('#catalog-list').innerHTML = catalogTasks.length ? catalogTasks.map((task) => {
-        return `<article class="task-card level-card level-${task.level}"><div class="task-card-header"><div class="task-level-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span>${task.level === 'draft' ? '<span class="task-refinement">Требует уточнения</span>' : ''}</div><strong>${task.score}/100</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><p class="task-readiness">${readiness[task.level]}</p><div class="task-card-footer"><span>${task.proposals_count} ${plural(task.proposals_count, ['отклик', 'отклика', 'откликов'])}</span><div class="task-actions"><button class="primary-button" type="button" data-action="apply" data-task-id="${escape(task.id)}">Откликнуться</button></div></div></article>`;
+        return `<article class="task-card level-card level-${task.level}"><div class="task-card-header"><div class="task-level-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span>${task.level === 'draft' ? '<span class="task-refinement">Требует уточнения</span>' : ''}</div><strong>${task.score}/100</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><p class="task-readiness">${readiness[task.level]}</p><div class="task-card-footer"><span>${task.proposals_count} ${plural(task.proposals_count, ['отклик', 'отклика', 'откликов'])}</span><div class="task-actions"><button class="primary-button" type="button" data-action="apply" data-task-id="${escape(task.id)}">${(task.is_demo || !task.owner) ? 'Подробнее' : 'Откликнуться'}</button></div></div></article>`;
       }).join('') : '<p class="placeholder-text">По выбранным фильтрам задач пока нет.</p>';
     } finally {
       if (version === catalogRevision) {
@@ -375,16 +486,24 @@ document.addEventListener('DOMContentLoaded', () => {
     run(button, async () => {
       await showTab('team');
       if (activeProfile !== 'student') return;
-      if (!availableTeams.length) { await openTeam(); notify('Сначала создайте команду.'); return; }
       const task = teamTasks.find((item) => item.id === button.dataset.taskId);
-      if (task) await showTaskDetails(task, true);
+      if (task) {
+        await showTaskDetails(task, true);
+        if (currentUser?.role === 'student' && !currentUser.team_id) await openTeam();
+      }
       else notify('Задача больше не опубликована. Обновите каталог.', true);
     });
   });
   async function loadProposals() {
+    if (currentUser?.role !== 'business') {
+      $('#proposal-task').replaceChildren();
+      $('#edit-task-button').disabled = true;
+      $('#proposal-list').innerHTML = '<p class="placeholder-text">Войдите как предприниматель, чтобы увидеть отклики на свои задачи.</p>';
+      return;
+    }
     const tasks = [];
     let page;
-    do { page = await api.getTasks({ include_drafts: true, owner_id: $('#proposal-business').value, offset: tasks.length, limit: 100 }); tasks.push(...page); } while (page.length === 100);
+    do { page = await api.getTasks({ include_drafts: true, owner_id: currentUser.id, offset: tasks.length, limit: 100 }); tasks.push(...page); } while (page.length === 100);
     const previous = $('#proposal-task').value;
     $('#proposal-task').innerHTML = tasks.map((task) => `<option value="${escape(task.id)}">${escape(task.title || 'Без названия')}${task.confirmed ? '' : ' (не опубликована)'}</option>`).join('');
     if (tasks.some((task) => task.id === previous)) $('#proposal-task').value = previous;
@@ -392,10 +511,12 @@ document.addEventListener('DOMContentLoaded', () => {
     await renderProposals();
   }
   onClick('#edit-task-button', async () => {
+    if (!requireRole('business')) return;
     const taskId = $('#proposal-task').value;
     if (!taskId) return;
     const task = await api.getTask(taskId);
-    card = task.card; publishedId = task.id; $('#business-choice').value = task.owner?.id || ''; $('#business-choice').disabled = true; $('#confirm-check').checked = false;
+    if (task.owner?.id !== currentUser.id || task.is_demo) throw new Error('Можно редактировать только собственные задачи.');
+    card = task.card; publishedId = task.id; $('#confirm-check').checked = false;
     unlockedStep = 4; completedSteps.clear();
     $('#draft-text').value = card.context; $('#task-topic').value = card.topic;
     renderFields(); updatePublish(); await refreshScore(); await showTab('business-task'); setStep(3);
@@ -407,6 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   }
   async function renderProposals() {
+    if (currentUser?.role !== 'business') return;
     const version = ++proposalRevision;
     const taskId = $('#proposal-task').value;
     if (!taskId) { $('#proposal-list').innerHTML = '<p class="placeholder-text">Сначала опубликуйте задачу.</p>'; return; }
@@ -424,6 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const button = event.target.closest('[data-proposal-id]');
     if (!button) return;
     run(button, async () => {
+      if (!requireRole('business')) return;
       if (button.dataset.decision) await api.decideProposal(button.dataset.proposalId, { decision: button.dataset.decision });
       else await api.updateProgress(button.dataset.proposalId, { stage: button.dataset.stage });
       await renderProposals(); notify('Изменения сохранены.');
@@ -453,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderRecommendations() {
     $('#recommendation-counter').textContent = `Показано ${Math.min(recommendationLimit, recommendations.length)} из ${recommendations.length}`;
-    $('#recommendation-list').innerHTML = recommendations.length ? recommendations.slice(0, recommendationLimit).map(({ task, score, matched }) => `<article class="task-card recommendation-card"><div class="task-card-header"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${score}% совпадение</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${escape(item)}</span>`).join('')}</div></div><button class="primary-button" type="button" data-task-id="${escape(task.id)}">Подробнее / Откликнуться</button></article>`).join('') : '<p class="placeholder-text">Подходящих задач пока нет. Все опубликованные задачи доступны в каталоге.</p>';
+    $('#recommendation-list').innerHTML = recommendations.length ? recommendations.slice(0, recommendationLimit).map(({ task, score, matched }) => `<article class="task-card recommendation-card"><div class="task-card-header"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${score}% совпадение</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${escape(item)}</span>`).join('')}</div></div><button class="primary-button" type="button" data-task-id="${escape(task.id)}">${(task.is_demo || !task.owner) ? 'Подробнее' : 'Подробнее / Откликнуться'}</button></article>`).join('') : '<p class="placeholder-text">Подходящих задач пока нет. Все опубликованные задачи доступны в каталоге.</p>';
     $('#recommendation-more').hidden = recommendationLimit >= recommendations.length;
   }
   onClick('#recommendation-more', () => {
@@ -464,15 +587,20 @@ document.addEventListener('DOMContentLoaded', () => {
   async function renderTeam() {
     ++detailRevision;
     const version = ++teamRevision;
-    const [teams, tasks] = await Promise.all([allTeams(), allPages(api.getTasks)]);
+    const [allAvailableTeams, tasks] = await Promise.all([allTeams(), allPages(api.getTasks)]);
     if (version !== teamRevision) return;
+    const teams = currentUser ? allAvailableTeams.filter((item) => item.id === currentUser.team_id) : allAvailableTeams;
     const team = teams.find((item) => item.id === selectedTeamId) || teams[0];
-    const proposals = team ? await allPages(api.getTeamProposals, { team_id: team.id }) : [];
+    const proposals = team && (team.is_demo || currentUser?.role === 'student')
+      ? await allPages(api.getTeamProposals, { team_id: team.id }) : [];
     if (version !== teamRevision) return;
     availableTeams = teams; teamTasks = tasks; teamProposals = proposals; selectedTeamId = team?.id || null;
     const options = teams.map((item) => `<option value="${escape(item.id)}">${escape(item.name)}</option>`).join('');
     $('#team-select').innerHTML = options; $('#response-team').innerHTML = options;
     $('#team-select').value = selectedTeamId || ''; $('#response-team').value = selectedTeamId || '';
+    $('#team-select').disabled = Boolean(currentUser) || !teams.length;
+    $('#open-team-button').textContent = currentUser?.team_id ? 'Изменить команду' : 'Создать команду';
+    $('#open-team-button').disabled = Boolean(currentUser?.team_id && team?.is_demo);
     $('#team-heading-name').textContent = team?.name || 'Команда';
     $('#team-summary').textContent = team ? `${team.points} ${plural(team.points, ['балл', 'балла', 'баллов'])} команды` : 'Пока нет команд. Создайте команду при отклике на задачу в каталоге.';
     $('#team-profile').innerHTML = team ? [['interests', 'Интересы'], ['skills', 'Навыки'], ['tech', 'Технологии']].map(([key, label]) => `<div class="team-stat"><span>${label}</span><div class="profile-chips">${team[key].map((item) => `<span>${escape(item)}</span>`).join('')}</div></div>`).join('') : '';
@@ -481,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     recommendationTeamId = selectedTeamId;
     recommendations = team ? recommendTasks(team, tasks) : [];
     renderRecommendations();
-    $('#team-proposals-list').innerHTML = proposals.length ? proposals.map((proposal) => `<article class="team-proposal-row"><div><strong>${escape(tasks.find((task) => task.id === proposal.task_id)?.title || proposal.task_id)}</strong><span class="muted">${escape(proposal.deadline)}${proposal.stages_done.length ? ` · ${proposal.stages_done.map((stage) => stages[stage][0]).join(' → ')}` : ''}</span></div><span class="status-badge status-${proposal.status}">${statuses[proposal.status]}</span></article>`).join('') : '<p class="placeholder-text">Команда пока никуда не откликалась.</p>';
+    $('#team-proposals-list').innerHTML = proposals.length ? proposals.map((proposal) => `<article class="team-proposal-row"><div><strong>${escape(tasks.find((task) => task.id === proposal.task_id)?.title || proposal.task_id)}</strong><span class="muted">${escape(proposal.deadline)}${proposal.stages_done.length ? ` · ${proposal.stages_done.map((stage) => stages[stage][0]).join(' → ')}` : ''}</span></div><span class="status-badge status-${proposal.status}">${statuses[proposal.status]}</span></article>`).join('') : `<p class="placeholder-text">${currentUser ? 'Команда пока никуда не откликалась.' : 'Войдите, чтобы увидеть свои отклики.'}</p>`;
     if (selectedTask && team) {
       const task = tasks.find((item) => item.id === selectedTask.id);
       if (task) await showTaskDetails(task);
@@ -505,16 +633,18 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#detail-title').textContent = task.title;
     $('#detail-content').innerHTML = `<div class="detail-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${task.score}/100</strong></div><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-box"><span>Совпадение с профилем: ${match.score}%</span><strong>${escape(match.matched.join(' · ') || 'Совпадения не найдены — отклик всё равно доступен')}</strong></div>`;
     $('#detail-content').innerHTML += fields.filter(([key]) => !['title', 'topic', 'need'].includes(key)).map(([key, label]) => `<p><strong>${escape(label)}:</strong> ${escape(detail.card[key] || 'Пока не указано')}</p>`).join('');
-    $('#response-form').hidden = Boolean(existing) || !team;
-    $('#response-message').textContent = existing ? `Команда уже отправила отклик: ${statuses[existing.status]}.` : '';
+    const mayApply = currentUser?.role === 'student' && currentUser.team_id === team?.id && !team.is_demo && !task.is_demo && Boolean(task.owner);
+    $('#response-form').hidden = Boolean(existing) || !mayApply;
+    $('#response-message').textContent = existing ? `Команда уже отправила отклик: ${statuses[existing.status]}.`
+      : task.is_demo ? 'Демозадача доступна только для просмотра.'
+      : !task.owner ? 'Задача доступна только для просмотра.'
+      : !currentUser ? 'Войдите как студент, чтобы откликнуться.'
+      : !currentUser.team_id ? 'Создайте команду, чтобы откликнуться.' : '';
     $('#team-detail-panel').hidden = false;
   }
   $('#team-select').addEventListener('change', () => {
+    if (currentUser) return;
     selectedTeamId = $('#team-select').value;
-    run(null, renderTeam);
-  });
-  $('#response-team').addEventListener('change', () => {
-    selectedTeamId = $('#response-team').value;
     run(null, renderTeam);
   });
   $('#recommendation-list').addEventListener('click', (event) => {
@@ -526,8 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
   onClick('#close-detail-button', () => { ++detailRevision; selectedTask = null; $('#team-detail-panel').hidden = true; });
   $('#response-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!selectedTask || !selectedTeamId) return;
-    const payload = { team_id: selectedTeamId, idea: $('#response-idea').value.trim(), plan: $('#response-plan').value.trim(), deadline: $('#response-deadline').value, prototype_url: $('#response-prototype').value.trim() };
+    if (!requireRole('student') || !selectedTask || !currentUser.team_id || selectedTeamId !== currentUser.team_id) return;
+    const payload = { team_id: currentUser.team_id, idea: $('#response-idea').value.trim(), plan: $('#response-plan').value.trim(), deadline: $('#response-deadline').value, prototype_url: $('#response-prototype').value.trim() };
     const errors = {}, now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (payload.idea.length < 20) errors.idea = 'Идея должна содержать минимум 20 символов.';
@@ -548,14 +678,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }, $('#response-message'));
   });
 
-  renderFields(); updatePublish(); setStep(1);
-  let savedProfile = 'business';
+  renderFields(); updatePublish(); setStep(1); syncAccount();
+  let savedProfile = 'student';
   try {
     const saved = localStorage.getItem('ghosttech.profile');
     if (Object.hasOwn(profileTabs, saved)) savedProfile = saved;
-  } catch { /* Use the business profile when storage is unavailable. */ }
-  run(null, () => selectProfile(savedProfile));
+  } catch { /* Use the public catalog when storage is unavailable. */ }
   run(null, async () => {
+    try { currentUser = await api.getMe(); }
+    catch (error) { if (error.status !== 401) throw error; }
+    selectedTeamId = currentUser?.team_id || null;
+    syncAccount();
+    await selectProfile(currentUser?.role || savedProfile);
     const health = await api.getHealth();
     $('#mode-label').textContent = health.mode === 'demo' ? 'Деморежим · шаблонные вопросы' : 'ИИ включён · OpenAI';
     await Promise.all([refreshScore(), loadTopics(), loadParticipants()]);

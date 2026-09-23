@@ -153,6 +153,61 @@ def audit():
         results.append(Result(identifier, title, status, severity, evidence, recommendation))
 
     with isolated_app() as (app, ids), TestClient(app, raise_server_exceptions=False) as client:
+        business = TestClient(app, raise_server_exceptions=False)
+        student = TestClient(app, raise_server_exceptions=False)
+        authorized = None
+
+        def authorized_fixture():
+            nonlocal authorized
+            if authorized is not None:
+                return authorized
+            for actor, email, role in (
+                (business, "security-business@example.test", "business"),
+                (student, "security-student@example.test", "student"),
+            ):
+                response = actor.post(
+                    "/api/auth/register",
+                    json={
+                        "email": email,
+                        "name": role,
+                        "role": role,
+                        "password": "SecurityFixturePassword1!",
+                    },
+                )
+                if response.status_code != 201:
+                    raise RuntimeError("Fixture registration failed")
+            team_response = student.post("/api/teams", json={"name": "Security student team"})
+            task_response = business.post(
+                "/api/tasks",
+                json={
+                    "card": {"title": "Authorized fixture", "topic": "образование"},
+                    "confirmed": True,
+                },
+            )
+            if team_response.status_code != 201 or task_response.status_code != 201:
+                raise RuntimeError("Fixture team or task creation failed")
+            team_id = team_response.json()["id"]
+            task_id = task_response.json()["id"]
+            proposal_response = student.post(
+                f"/api/tasks/{task_id}/proposals",
+                json={
+                    "team_id": team_id,
+                    "idea": "Authorized fixture idea",
+                    "plan": "Authorized fixture plan",
+                    "deadline": str(date.today() + timedelta(days=7)),
+                    "prototype_url": "https://example.test/prototype",
+                },
+            )
+            if proposal_response.status_code != 201:
+                raise RuntimeError("Fixture proposal creation failed")
+            proposal_id = proposal_response.json()["id"]
+            decision = business.patch(
+                f"/api/proposals/{proposal_id}/decision", json={"decision": "accepted"}
+            )
+            if decision.status_code != 200:
+                raise RuntimeError("Fixture proposal acceptance failed")
+            authorized = {"team": team_id, "task": task_id, "proposal": proposal_id}
+            return authorized
 
         def unauthorized(method, path, **kwargs):
             response = client.request(method, path, **kwargs)
@@ -384,8 +439,9 @@ def audit():
         check("SQL-01", "SQL-инъекция в поиске каталога", "high", sqli)
 
         def dangerous_links():
+            owned = authorized_fixture()
             payload = {
-                "team_id": ids["team"],
+                "team_id": owned["team"],
                 "idea": "Проверка схемы ссылки",
                 "plan": "Проверка схемы ссылки",
                 "deadline": str(date.today() + timedelta(days=7)),
@@ -397,8 +453,9 @@ def audit():
                 "vbscript:msgbox(1)",
             ]
             codes = [
-                client.post(
-                    f"/api/tasks/{ids['task']}/proposals", json={**payload, "prototype_url": link}
+                student.post(
+                    f"/api/tasks/{owned['task']}/proposals",
+                    json={**payload, "prototype_url": link},
                 ).status_code
                 for link in links
             ]
@@ -407,10 +464,11 @@ def audit():
         check("URL-01", "Запрет исполняемых схем ссылок на прототип", "high", dangerous_links)
 
         def mass_assignment():
+            owned = authorized_fixture()
             responses = [
-                client.post("/api/tasks", json={"card": {}, "score": 100}),
-                client.post("/api/teams", json={"name": "Fixture", "points": 99999}),
-                client.patch(f"/api/tasks/{ids['task']}", json={"owner_id": "attacker"}),
+                business.post("/api/tasks", json={"card": {}, "score": 100}),
+                student.post("/api/teams", json={"name": "Fixture", "points": 99999}),
+                business.patch(f"/api/tasks/{owned['task']}", json={"owner_id": "attacker"}),
             ]
             codes = [response.status_code for response in responses]
             return all(code == 422 for code in codes), {"statuses": codes}
@@ -418,14 +476,15 @@ def audit():
         check("INPUT-01", "Запрет подмены вычисляемых полей", "high", mass_assignment)
 
         def invalid_input():
+            authorized_fixture()
             responses = [
-                client.post(
+                business.post(
                     "/api/tasks/analyze", content="{", headers={"Content-Type": "application/json"}
                 ),
-                client.post(
+                business.post(
                     "/api/tasks/analyze", json={"draft_text": "x" * 3001, "topic": "образование"}
                 ),
-                client.post("/api/tasks", json={"card": {"title": "x" * 201}}),
+                business.post("/api/tasks", json={"card": {"title": "x" * 201}}),
                 client.get("/api/tasks", params={"limit": 100000}),
                 client.get("/api/tasks", params={"offset": -1}),
             ]
@@ -437,16 +496,17 @@ def audit():
         check("INPUT-02", "Границы входных данных и безопасные ошибки", "medium", invalid_input)
 
         def double_points():
-            path = f"/api/proposals/{ids['proposal']}/progress"
-            first = client.post(path, json={"stage": "testing"})
-            second = client.post(path, json={"stage": "testing"})
+            owned = authorized_fixture()
+            path = f"/api/proposals/{owned['proposal']}/progress"
+            first = business.post(path, json={"stage": "testing"})
+            second = business.post(path, json={"stage": "testing"})
             with Session(app.state.engine) as db:
                 from app.models import Progress
 
                 points = list(
                     db.scalars(
                         select(Progress).where(
-                            Progress.proposal_id == ids["proposal"], Progress.stage == "testing"
+                            Progress.proposal_id == owned["proposal"], Progress.stage == "testing"
                         )
                     )
                 )
@@ -519,8 +579,8 @@ def audit():
             "no real AI requests; no production data writes"
         ),
         "policy": (
-            "Public deployment readiness. Anonymous demo access is expected by the "
-            "hackathon MVP, but is not an authorization boundary."
+            "Public demo records are read-only. Changes require an authenticated "
+            "account, matching role and ownership; assistant calls have a daily account quota."
         ),
         "limitations": [
             "Not a penetration-test certification",

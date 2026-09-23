@@ -38,7 +38,7 @@ class Team(Base):
 
 
 class Participant(Base):
-    """Public demo profiles, without accounts or authentication credentials."""
+    """Public profiles; only non-demo profiles may be linked to accounts."""
 
     __tablename__ = "participants"
     __table_args__ = (
@@ -54,6 +54,38 @@ class Participant(Base):
     is_demo: Mapped[bool] = mapped_column(default=True)
     team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"), index=True)
     team: Mapped["Team | None"] = relationship(back_populates="members")
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    participant_id: Mapped[str] = mapped_column(
+        ForeignKey("participants.id"), unique=True, index=True
+    )
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    participant: Mapped[Participant] = relationship(lazy="selectin")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    account: Mapped[Account] = relationship(lazy="selectin")
+
+
+class AiUsage(Base):
+    __tablename__ = "ai_usage"
+    __table_args__ = (CheckConstraint("requests >= 0", name="ck_ai_usage_requests"),)
+
+    participant_id: Mapped[str] = mapped_column(ForeignKey("participants.id"), primary_key=True)
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    requests: Mapped[int] = mapped_column(default=0)
 
 
 class Task(Base):

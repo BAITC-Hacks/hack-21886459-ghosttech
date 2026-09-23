@@ -5,27 +5,49 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../api.js'), 'utf8');
 
-function client(fetch, port = '8080') {
+function client(fetch, port = '8000') {
   const sandbox = { window: {}, location: { protocol: 'http:', hostname: '127.0.0.1', port },
     fetch, URLSearchParams, encodeURIComponent, Error };
   vm.runInNewContext(source, sandbox);
   return sandbox.window.api;
 }
 
-test('static frontend targets FastAPI, omits blank filters and sends no credentials', async () => {
+test('static frontend on 8080 targets FastAPI on 8000 with session cookies', async () => {
   const api = client(async (url, options) => {
     assert.equal(url, 'http://127.0.0.1:8000/api/tasks?offset=0&limit=50');
-    assert.equal(options.credentials, 'omit');
+    assert.equal(options.credentials, 'include');
     assert.equal(options.method, 'GET');
     return { ok: true, status: 200, json: async () => [] };
-  });
+  }, '8080');
   assert.deepEqual(await api.getTasks({ topic: '', level: '', offset: 0, limit: 50 }), []);
+});
+
+test('account requests use JSON and include the session across local ports', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: url.endsWith('/logout') ? 204 : 200,
+      json: async () => ({ id: 'user1', role: 'student' }) };
+  }, '8080');
+  assert.equal((await api.getMe()).id, 'user1');
+  assert.equal((await api.login({ email: 'a@example.test', password: 'secret' })).role, 'student');
+  await api.register({ email: 'b@example.test', password: 'secret', name: 'B', role: 'business' });
+  assert.equal(await api.logout(), null);
+  assert.deepEqual(calls.map((call) => call.url),
+    ['/api/auth/me', '/api/auth/login', '/api/auth/register', '/api/auth/logout']
+      .map((path) => `http://127.0.0.1:8000${path}`));
+  assert.deepEqual(calls.map((call) => call.options.method), ['GET', 'POST', 'POST', 'POST']);
+  assert.ok(calls.every((call) => call.options.credentials === 'include'));
+  assert.deepEqual(JSON.parse(calls[2].options.body),
+    { email: 'b@example.test', password: 'secret', name: 'B', role: 'business' });
+  assert.deepEqual(JSON.parse(calls[3].options.body), {});
 });
 
 test('same-origin client serializes bodies and encodes path IDs', async () => {
   const api = client(async (url, options) => {
     assert.equal(url, '/api/tasks/task%2F1/proposals');
     assert.equal(options.method, 'POST');
+    assert.equal(options.credentials, 'include');
     assert.equal(options.headers['Content-Type'], 'application/json');
     assert.deepEqual(JSON.parse(options.body), { team_id: 'team1', idea: 'Test' });
     return { ok: true, status: 201, json: async () => ({ id: 'p1' }) };
