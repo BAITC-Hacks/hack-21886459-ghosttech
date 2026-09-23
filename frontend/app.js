@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await api.getLeaderboard({ period, limit: 10 });
       if (version !== leaderboardRevision) return;
-      const date = new Date(result.as_of).toLocaleDateString(window.GhostI18n?.locale() || 'ru-RU', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+      const date = window.GhostI18n.formatMonth(result.as_of);
       $('#leader-status').textContent = `${period === 'month' ? date : 'Рейтинг за всё время'} · ${result.businesses.length} профилей бизнеса и ${result.teams.length} команд`;
       $('#business-leaders').innerHTML = result.businesses.length ? result.businesses.map((row) => rankCard(row, 'business')).join('') : '<p class="placeholder-text">За этот период пока нет опубликованных задач или подтверждённых результатов бизнеса. Попробуйте «Всё время».</p>';
       $('#team-leaders').innerHTML = result.teams.length ? result.teams.map((row) => rankCard(row, 'team')).join('') : '<p class="placeholder-text">За этот период команды ещё не получили баллы за подтверждённые этапы. Попробуйте «Всё время».</p>';

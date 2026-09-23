@@ -78,6 +78,16 @@
     t: translate,
     language: () => language,
     locale: () => ({ ru: 'ru-RU', kk: 'kk-KZ', en: 'en-GB' })[language],
+    formatMonth: (value) => {
+      const date = new Date(value);
+      const months = {
+        ru: ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'],
+        kk: ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'],
+        en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+      };
+      const month = months[language][date.getUTCMonth()], year = date.getUTCFullYear();
+      return language === 'kk' ? `${year} жылғы ${month}` : `${month} ${year}${language === 'ru' ? ' г.' : ''}`;
+    },
     originalText: (element) => [...element.childNodes].map((node) => originals.get(node)?.text?.source ?? node.textContent).join(''),
     setLanguage(next) {
       if (!['ru', 'kk', 'en'].includes(next)) return;
