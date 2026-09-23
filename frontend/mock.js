@@ -270,6 +270,8 @@ window.mockApi = (() => {
       stagesDone.add(stage);
       proposal.stages_done = Array.from(stagesDone);
       const pointsTotal = Array.from(stagesDone).reduce((sum, item) => sum + (stageMap[item] || 0), 0);
+      const team = getTeams().find((item) => item.id === proposal.team_id);
+      if (team) team.points += stageMap[stage] || 0;
       return {
         proposal_id: proposalId,
         team_id: proposal.team_id,
@@ -308,7 +310,7 @@ if (typeof window !== 'undefined') {
         score: 82,
         level: 'ready',
         created_at: '2026-09-20T10:00:00Z',
-        proposals: ['p1']
+        proposals: ['p1', 'p6', 'p7']
       },
       {
         id: 't2',
@@ -403,7 +405,9 @@ if (typeof window !== 'undefined') {
       { id: 'p2', task_id: 't2', team_id: 'team5', idea: 'Построим систему распределения заявок на кружки по пулам и очередям ожидания.', plan: 'Нарисуем MVP списка заявок, затем добавим фильтры и статусы по группам.', deadline: '2026-10-08', prototype_url: 'https://example.com/prototype/circle-flow', status: 'pending', stages_done: [] },
       { id: 'p3', task_id: 't3', team_id: 'team2', idea: 'Сделаем дашборд статусов заказов и аналитический экран для задержек сборки.', plan: 'Построим карточки заказов, фильтры и таймлайн сборки по этапам.', deadline: '2026-10-12', prototype_url: 'https://example.com/prototype/retail-flow', status: 'rejected', stages_done: [] },
       { id: 'p4', task_id: 't4', team_id: 'team4', idea: 'Сконцентрируемся на визуализации маршрутов и причин задержек между складами.', plan: 'Соберём реестр маршрутов и аномалий, затем покажем проблемные участки на карте.', deadline: '2026-10-15', prototype_url: 'https://example.com/prototype/logi-map', status: 'accepted', stages_done: ['prototype'] },
-      { id: 'p5', task_id: 't5', team_id: 'team3', idea: 'Делаем единый канал заявок для жителей и удобный статусный экран для сотрудников.', plan: 'Реализуем модель приоритетов и рабочий поток для исполнителей.', deadline: '2026-10-10', prototype_url: 'https://example.com/prototype/city-requests', status: 'pending', stages_done: [] }
+      { id: 'p5', task_id: 't5', team_id: 'team3', idea: 'Делаем единый канал заявок для жителей и удобный статусный экран для сотрудников.', plan: 'Реализуем модель приоритетов и рабочий поток для исполнителей.', deadline: '2026-10-10', prototype_url: 'https://example.com/prototype/city-requests', status: 'pending', stages_done: [] },
+      { id: 'p6', task_id: 't1', team_id: 'team5', idea: 'Соберём кабинет посещаемости для педагогов и родителей с простым журналом занятий.', plan: 'Проведём исследование, сделаем MVP журнала и проверим его на одной группе.', deadline: '2026-10-20', prototype_url: 'https://example.com/prototype/attendance', status: 'pending', stages_done: [] },
+      { id: 'p7', task_id: 't1', team_id: 'team3', idea: 'Настроим единый экран посещаемости и уведомления для ответственных сотрудников школы.', plan: 'Опишем роли, соберём прототип и проверим сценарий на тестовых данных.', deadline: '2026-10-22', prototype_url: 'https://example.com/prototype/school-ops', status: 'rejected', stages_done: [] }
     ]
   };
 

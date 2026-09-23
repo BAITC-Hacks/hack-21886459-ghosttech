@@ -10,6 +10,26 @@
     "status": "accepted"
   },
   {
+    "id": "p6",
+    "task_id": "t1",
+    "team_id": "team5",
+    "idea": "Соберём кабинет посещаемости для педагогов и родителей с простым журналом занятий.",
+    "plan": "Проведём исследование, сделаем MVP журнала и проверим его на одной группе.",
+    "deadline": "2026-10-20",
+    "prototype_url": "https://example.com/prototype/attendance",
+    "status": "pending"
+  },
+  {
+    "id": "p7",
+    "task_id": "t1",
+    "team_id": "team3",
+    "idea": "Настроим единый экран посещаемости и уведомления для ответственных сотрудников школы.",
+    "plan": "Опишем роли, соберём прототип и проверим сценарий на тестовых данных.",
+    "deadline": "2026-10-22",
+    "prototype_url": "https://example.com/prototype/school-ops",
+    "status": "rejected"
+  },
+  {
     "id": "p2",
     "task_id": "t2",
     "team_id": "team5",

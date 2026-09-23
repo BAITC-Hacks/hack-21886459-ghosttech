@@ -213,6 +213,31 @@ main {
   font-size: 0.85rem;
 }
 
+.task-actions,
+.stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-actions .primary-button,
+.task-actions .secondary-button,
+.stage-actions .secondary-button {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.field-error {
+  min-height: 18px;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+.prototype-line a {
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+
 .proposal-card .action-row {
   margin: 0;
 }
@@ -224,7 +249,7 @@ main {
   font-weight: 700;
 }
 
-.status-pending { background: var(--priority-soft); color: #B45309; }
+.status-pending { background: var(--panel-alt); color: var(--muted); }
 .status-accepted { background: var(--ready-soft); color: #047857; }
 .status-rejected { background: #FEF2F2; color: #B91C1C; }
 

@@ -109,9 +109,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailContent = document.querySelector('#detail-content');
   const closeDetailButton = document.querySelector('#close-detail-button');
   const responseForm = document.querySelector('#response-form');
+  const responseTeam = document.querySelector('#response-team');
   const responseIdea = document.querySelector('#response-idea');
   const responsePlan = document.querySelector('#response-plan');
   const responseDeadline = document.querySelector('#response-deadline');
+  const responsePrototype = document.querySelector('#response-prototype');
+  const responseSubmitButton = document.querySelector('#response-submit-button');
   const responseMessage = document.querySelector('#response-message');
 
   let currentStep = 1;
@@ -163,8 +166,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const statusLabels = {
     pending: 'На рассмотрении',
-    accepted: 'Принят',
+    accepted: 'Выбрана',
     rejected: 'Отклонён'
+  };
+
+  const proposalStageLabels = {
+    prototype: 'Прототип +10',
+    testing: 'Проверено с бизнесом +20',
+    final: 'Результат принят +30'
+  };
+
+  const getSelectedTeamProposal = (taskId, teamId) => (teamId ? window.mockApi?.getProposals?.({ team_id: teamId }) || [] : [])
+    .find((proposal) => proposal.task_id === taskId);
+
+  const populateResponseTeams = () => {
+    const teams = window.mockApi?.getTeams?.() || [];
+    responseTeam.innerHTML = teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join('');
+    if (selectedTeam) responseTeam.value = selectedTeam.id;
   };
 
   const renderCatalog = () => {
@@ -181,7 +199,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <p>${task.need || 'Потребность пока не описана.'}</p>
         <div class="task-card-footer">
           <span>${task.proposals_count} откликов</span>
-          <button class="secondary-button view-proposals" type="button" data-task-id="${task.id}">Смотреть отклики</button>
+          <div class="task-actions">
+            <button class="primary-button apply-from-catalog" type="button" data-task-id="${task.id}">${getSelectedTeamProposal(task.id, selectedTeam?.id) ? 'Вы уже откликнулись' : 'Откликнуться'}</button>
+            <button class="secondary-button view-proposals" type="button" data-task-id="${task.id}">Смотреть отклики</button>
+          </div>
         </div>
       </article>
     `).join('') : '<p class="placeholder-text">По выбранным фильтрам задач пока нет.</p>';
@@ -193,6 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('[data-tab="business-proposals"]').click();
       });
     });
+    catalogList.querySelectorAll('.apply-from-catalog').forEach((button) => {
+      const alreadyApplied = Boolean(getSelectedTeamProposal(button.dataset.taskId, selectedTeam?.id));
+      button.disabled = alreadyApplied;
+      button.addEventListener('click', () => openResponseForTask(button.dataset.taskId));
+    });
   };
 
   const renderProposals = () => {
@@ -202,6 +228,8 @@ document.addEventListener('DOMContentLoaded', () => {
     proposalList.innerHTML = proposals.length ? proposals.map((proposal) => {
       const team = teams.find((item) => item.id === proposal.team_id);
       const isPending = proposal.status === 'pending';
+      const stages = ['prototype', 'testing', 'final'];
+      const completedStages = new Set(proposal.stages_done || []);
       return `
         <article class="proposal-card">
           <div class="proposal-header">
@@ -210,9 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <p><strong>Идея:</strong> ${proposal.idea}</p>
           <p><strong>План:</strong> ${proposal.plan}</p>
+          <p class="prototype-line"><strong>Прототип:</strong> ${proposal.prototype_url ? `<a href="${proposal.prototype_url}" target="_blank" rel="noopener">${proposal.prototype_url}</a>` : 'не указан'}</p>
           <div class="proposal-footer">
             <span>Срок: ${proposal.deadline}</span>
-            ${isPending ? `<div class="action-row"><button class="primary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="accepted" type="button">Принять</button><button class="secondary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="rejected" type="button">Отклонить</button></div>` : ''}
+            ${isPending ? `<div class="action-row"><button class="primary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="accepted" type="button">Выбрать</button><button class="secondary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="rejected" type="button">Отклонить</button></div>` : ''}
+            ${proposal.status === 'accepted' ? `<div class="stage-actions">${stages.map((stage) => `<button class="secondary-button proposal-stage" data-proposal-id="${proposal.id}" data-stage="${stage}" type="button" ${completedStages.has(stage) ? 'disabled' : ''}>${completedStages.has(stage) ? '✓ ' : ''}${proposalStageLabels[stage]}</button>`).join('')}</div>` : ''}
           </div>
         </article>
       `;
@@ -223,6 +253,13 @@ document.addEventListener('DOMContentLoaded', () => {
         window.mockApi.decideProposal(button.dataset.proposalId, { decision: button.dataset.decision });
         renderProposals();
         renderCatalog();
+      });
+    });
+
+    proposalList.querySelectorAll('.proposal-stage').forEach((button) => {
+      button.addEventListener('click', () => {
+        window.mockApi.updateProgress(button.dataset.proposalId, { stage: button.dataset.stage });
+        renderProposals();
       });
     });
   };
@@ -258,8 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const showRecommendationDetails = (recommendation) => {
     selectedRecommendation = recommendation;
     const { task, score, matched } = recommendation;
-    const existingProposal = (window.mockApi?.getProposals?.({ team_id: selectedTeam.id }) || [])
-      .find((proposal) => proposal.task_id === task.id);
+    populateResponseTeams();
+    const existingProposal = selectedTeam ? getSelectedTeamProposal(task.id, selectedTeam.id) : null;
     detailTitle.textContent = task.title;
     detailContent.innerHTML = `
       <div class="detail-meta"><span class="level-badge level-${task.level}">${levelLabels[task.level]}</span><strong>${task.score}/100</strong></div>
@@ -272,6 +309,44 @@ document.addEventListener('DOMContentLoaded', () => {
     teamDetailPanel.hidden = false;
   };
 
+  const openResponseForTask = (taskId) => {
+    const task = (window.mockApi?.listTasks?.() || []).find((item) => item.id === taskId);
+    if (!task) return;
+    const teams = window.mockApi?.getTeams?.() || [];
+    if (!selectedTeam) selectedTeam = teams[0] || null;
+    if (selectedTeam) teamSelect.value = selectedTeam.id;
+    showRecommendationDetails({ task, score: 0, matched: [] });
+    document.querySelector('[data-tab="team"]').click();
+    teamDetailPanel.hidden = false;
+  };
+
+  const validateResponse = () => {
+    const errors = {};
+    const idea = responseIdea.value.trim();
+    const plan = responsePlan.value.trim();
+    const deadline = responseDeadline.value;
+    const prototype = responsePrototype.value.trim();
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (idea.length < 20) errors.idea = 'Идея должна содержать минимум 20 символов.';
+    if (plan.length < 20) errors.plan = 'План должен содержать минимум 20 символов.';
+    if (!deadline || deadline < today) errors.deadline = 'Срок не может быть в прошлом.';
+    try {
+      const url = new URL(prototype);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol');
+    } catch {
+      errors.prototype = 'Укажите ссылку, начинающуюся с http:// или https://.';
+    }
+    return errors;
+  };
+
+  const renderResponseErrors = (errors) => {
+    document.querySelector('#response-idea-error').textContent = errors.idea || '';
+    document.querySelector('#response-plan-error').textContent = errors.plan || '';
+    document.querySelector('#response-deadline-error').textContent = errors.deadline || '';
+    document.querySelector('#response-prototype-error').textContent = errors.prototype || '';
+  };
+
   const renderTeam = () => {
     const teams = window.mockApi?.getTeams?.() || [];
     if (!teams.length) return;
@@ -280,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     selectedTeam = teams.find((team) => team.id === teamSelect.value) || teams[0];
     teamSelect.value = selectedTeam.id;
+    populateResponseTeams();
     renderTeamProfile();
     const recommendations = recommendTasks(selectedTeam, window.mockApi?.listTasks?.() || []);
     recommendationCounter.textContent = `${recommendations.length} задач`;
@@ -505,6 +581,14 @@ document.addEventListener('DOMContentLoaded', () => {
   catalogTopic.addEventListener('change', renderCatalog);
   catalogLevel.addEventListener('change', renderCatalog);
   proposalTask.addEventListener('change', renderProposals);
+  responseTeam.addEventListener('change', () => {
+    selectedTeam = (window.mockApi?.getTeams?.() || []).find((team) => team.id === responseTeam.value) || selectedTeam;
+    if (selectedRecommendation) {
+      const existingProposal = getSelectedTeamProposal(selectedRecommendation.task.id, selectedTeam?.id);
+      responseForm.hidden = Boolean(existingProposal);
+      responseMessage.textContent = existingProposal ? `Команда уже отправила отклик: ${statusLabels[existingProposal.status] || existingProposal.status}.` : '';
+    }
+  });
   teamSelect.addEventListener('change', renderTeam);
   closeDetailButton.addEventListener('click', () => {
     teamDetailPanel.hidden = true;
@@ -514,16 +598,27 @@ document.addEventListener('DOMContentLoaded', () => {
   responseForm.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!selectedTeam || !selectedRecommendation) return;
-    const proposal = window.mockApi.createProposal(selectedRecommendation.task.id, {
-      team_id: selectedTeam.id,
+    const errors = validateResponse();
+    renderResponseErrors(errors);
+    if (Object.keys(errors).length) return;
+    responseSubmitButton.disabled = true;
+    responseSubmitButton.textContent = 'Отправка...';
+    Promise.resolve().then(() => window.mockApi.createProposal(selectedRecommendation.task.id, {
+      team_id: responseTeam.value,
       idea: responseIdea.value.trim(),
       plan: responsePlan.value.trim(),
       deadline: responseDeadline.value,
-      prototype_url: ''
+      prototype_url: responsePrototype.value.trim()
+    })).then((proposal) => {
+      selectedTeam = (window.mockApi.getTeams?.() || []).find((team) => team.id === responseTeam.value) || selectedTeam;
+      responseMessage.textContent = `Отклик отправлен: ${proposal.id}.`;
+      responseForm.hidden = true;
+      renderTeamProposals();
+      renderCatalog();
+    }).finally(() => {
+      responseSubmitButton.disabled = false;
+      responseSubmitButton.textContent = 'Отправить отклик';
     });
-    responseMessage.textContent = `Отклик отправлен: ${proposal.id}.`;
-    responseForm.hidden = true;
-    renderTeamProposals();
   });
 
   publishButton.addEventListener('click', async () => {

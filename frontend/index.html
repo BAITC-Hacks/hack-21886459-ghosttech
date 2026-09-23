@@ -155,7 +155,7 @@
         <section id="business-proposals" class="tab-panel" aria-label="Бизнес: отклики" hidden>
           <div class="panel-header">
             <h2>Отклики команд</h2>
-            <span class="muted">Решение принимает бизнес</span>
+            <span class="muted">Решение принимает бизнес вручную. Система не назначает команды.</span>
           </div>
           <div class="proposal-controls">
             <label for="proposal-task">Задача</label>
@@ -211,13 +211,21 @@
               <div id="detail-content" class="detail-content"></div>
               <form id="response-form" class="response-form" hidden>
                 <h4>Откликнуться</h4>
+                <label for="response-team">От команды</label>
+                <select id="response-team" required></select>
                 <label for="response-idea">Идея решения</label>
                 <textarea id="response-idea" required placeholder="Коротко опишите, что предложит команда"></textarea>
+                <small id="response-idea-error" class="field-error"></small>
                 <label for="response-plan">План работы</label>
                 <textarea id="response-plan" required placeholder="Опишите первые шаги и результат"></textarea>
+                <small id="response-plan-error" class="field-error"></small>
                 <label for="response-deadline">Срок</label>
                 <input id="response-deadline" type="date" required>
-                <button class="primary-button" type="submit">Отправить отклик</button>
+                <small id="response-deadline-error" class="field-error"></small>
+                <label for="response-prototype">Ссылка на прототип</label>
+                <input id="response-prototype" type="text" required placeholder="https://example.com/prototype">
+                <small id="response-prototype-error" class="field-error"></small>
+                <button id="response-submit-button" class="primary-button" type="submit">Отправить отклик</button>
                 <p id="response-message" class="publish-message" aria-live="polite"></p>
               </form>
             </aside>
