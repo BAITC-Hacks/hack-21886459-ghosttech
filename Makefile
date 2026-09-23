@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate seed openapi test test-client check
+.PHONY: setup dev migrate seed openapi test test-client check security-check
 
 setup:
 	uv sync --project backend --locked
@@ -25,3 +25,6 @@ test-client:
 check:
 	uv run --project backend --locked ruff check backend
 	uv run --project backend --locked ruff format --check backend
+
+security-check:
+	uv run --directory backend --locked python security_check.py
