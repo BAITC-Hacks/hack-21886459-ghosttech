@@ -1,0 +1,20 @@
+[project]
+name = "ghosttech-backend"
+version = "0.1.0"
+description = "FastAPI backend with SQLite and a static frontend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.34,<1.0",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1.0", "pytest>=8,<10", "ruff>=0.11,<1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
