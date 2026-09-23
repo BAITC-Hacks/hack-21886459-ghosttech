@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const plural = (number, forms) => {
+    const value = Math.abs(number) % 100;
+    const last = value % 10;
+    if (value > 10 && value < 20) return forms[2];
+    if (last === 1) return forms[0];
+    if (last >= 2 && last <= 4) return forms[1];
+    return forms[2];
+  };
+
   const fallbackFieldHints = {
     title: { label: 'Название', max: 0, hint_empty: 'Добавьте короткое название задачи — без него публикация невозможна.', hint_partial: '' },
     topic: { label: 'Тема', max: 0, hint_empty: 'Выберите тему — по ней студенты фильтруют каталог.', hint_partial: '' },
@@ -56,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const modeLabel = document.querySelector('#mode-label');
   if (modeLabel) {
-    modeLabel.textContent = window.api && window.api.USE_MOCK ? 'Режим: Демо-режим без ключа' : 'Режим: AI';
+    modeLabel.textContent = window.api && window.api.USE_MOCK ? 'Демо-режим (без API-ключа)' : 'Режим: AI';
   }
 
   const CARD_FIELDS = [
@@ -134,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   let selectedTeam = null;
   let selectedRecommendation = null;
+  let unlockedStep = 1;
+  const completedSteps = new Set();
 
   function recommendTasks(team, tasks) {
     const allowedLevels = new Set(['working', 'ready', 'priority']);
@@ -141,12 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const skills = (team?.skills || []).map((item) => item.toLowerCase());
 
     return tasks
-      .filter((task) => allowedLevels.has(task.level))
+      .filter((task) => allowedLevels.has(task.level) && task.score >= 40)
       .map((task) => {
         const haystack = `${task.title} ${task.topic} ${task.need}`.toLowerCase();
         const matched = [...new Set([
           ...interests.filter((interest) => task.topic.toLowerCase() === interest || haystack.includes(interest)),
-          ...skills.filter((skill) => haystack.includes(skill))
+          ...skills.filter((skill) => haystack.includes(skill)),
+          ...(team?.tech || []).map((item) => item.toLowerCase()).filter((technology) => haystack.includes(technology))
         ])];
         const topicMatch = interests.includes(task.topic.toLowerCase());
         const score = Math.min(100, (topicMatch ? 70 : 0) + Math.min(matched.length * 10, 30));
@@ -179,6 +191,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const getSelectedTeamProposal = (taskId, teamId) => (teamId ? window.mockApi?.getProposals?.({ team_id: teamId }) || [] : [])
     .find((proposal) => proposal.task_id === taskId);
 
+  const readinessLabels = {
+    priority: 'Полностью готова к работе',
+    ready: 'Можно начинать без уточнений',
+    working: 'Возможны уточнения',
+    draft: 'Потребуются уточнения у бизнеса'
+  };
+
   const populateResponseTeams = () => {
     const teams = window.mockApi?.getTeams?.() || [];
     responseTeam.innerHTML = teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join('');
@@ -187,18 +206,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const renderCatalog = () => {
     const tasks = window.mockApi?.listTasks?.({ topic: catalogTopic.value, level: catalogLevel.value }) || [];
-    catalogCounter.textContent = `${tasks.length} ${tasks.length === 1 ? 'задача' : 'задач'}`;
+    catalogCounter.textContent = `${tasks.length} ${plural(tasks.length, ['задача', 'задачи', 'задач'])}`;
     catalogList.innerHTML = tasks.length ? tasks.map((task) => `
-      <article class="task-card">
+      <article class="task-card level-card level-${task.level}">
         <div class="task-card-header">
-          <span class="level-badge level-${task.level}">${levelLabels[task.level] || task.level}</span>
+          <div class="task-level-meta"><span class="level-badge level-${task.level}">${levelLabels[task.level] || task.level}</span>${task.level === 'draft' ? '<span class="task-refinement">Требует уточнения</span>' : ''}</div>
           <strong>${task.score}/100</strong>
         </div>
         <h3>${task.title}</h3>
         <p class="task-topic">${task.topic}</p>
         <p>${task.need || 'Потребность пока не описана.'}</p>
+        <p class="task-readiness">${readinessLabels[task.level] || 'Потребуются уточнения у бизнеса'}</p>
         <div class="task-card-footer">
-          <span>${task.proposals_count} откликов</span>
+          <span>${task.proposals_count} ${plural(task.proposals_count, ['отклик', 'отклика', 'откликов'])}</span>
           <div class="task-actions">
             <button class="primary-button apply-from-catalog" type="button" data-task-id="${task.id}">${getSelectedTeamProposal(task.id, selectedTeam?.id) ? 'Вы уже откликнулись' : 'Откликнуться'}</button>
             <button class="secondary-button view-proposals" type="button" data-task-id="${task.id}">Смотреть отклики</button>
@@ -233,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return `
         <article class="proposal-card">
           <div class="proposal-header">
-            <div><h3>${team?.name || proposal.team_id}</h3><span class="muted">${team?.points || 0} баллов команды</span></div>
+            <div><h3>${team?.name || proposal.team_id}</h3><span class="muted">${team?.points || 0} ${plural(team?.points || 0, ['балл', 'балла', 'баллов'])} команды</span></div>
             <span class="status-badge status-${proposal.status}">${statusLabels[proposal.status] || proposal.status}</span>
           </div>
           <p><strong>Идея:</strong> ${proposal.idea}</p>
@@ -267,11 +287,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const renderTeamProfile = () => {
     if (!selectedTeam) return;
     teamName.textContent = selectedTeam.name;
-    teamSummary.textContent = `${selectedTeam.points} баллов команды · ${selectedTeam.interests.join(', ')}`;
+    teamSummary.textContent = `${selectedTeam.points} ${plural(selectedTeam.points, ['балл', 'балла', 'баллов'])} команды`;
     teamProfile.innerHTML = `
-      <div class="team-stat"><span>Интересы</span><strong>${selectedTeam.interests.join(' · ')}</strong></div>
-      <div class="team-stat"><span>Навыки</span><strong>${selectedTeam.skills.join(' · ')}</strong></div>
-      <div class="team-stat"><span>Технологии</span><strong>${selectedTeam.tech.join(' · ')}</strong></div>
+      <div class="team-stat"><span>Интересы</span><div class="profile-chips">${selectedTeam.interests.map((item) => `<span>${item}</span>`).join('')}</div></div>
+      <div class="team-stat"><span>Навыки</span><div class="profile-chips">${selectedTeam.skills.map((item) => `<span>${item}</span>`).join('')}</div></div>
+      <div class="team-stat"><span>Технологии</span><div class="profile-chips">${selectedTeam.tech.map((item) => `<span>${item}</span>`).join('')}</div></div>
     `;
   };
 
@@ -358,14 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
     populateResponseTeams();
     renderTeamProfile();
     const recommendations = recommendTasks(selectedTeam, window.mockApi?.listTasks?.() || []);
-    recommendationCounter.textContent = `${recommendations.length} задач`;
+    recommendationCounter.textContent = `${recommendations.length} ${plural(recommendations.length, ['задача', 'задачи', 'задач'])}`;
     recommendationList.innerHTML = recommendations.length ? recommendations.map(({ task, score, matched }) => `
       <article class="task-card recommendation-card">
         <div class="task-card-header"><span class="level-badge level-${task.level}">${levelLabels[task.level]}</span><strong>${score}% совпадение</strong></div>
         <h3>${task.title}</h3>
         <p class="task-topic">${task.topic}</p>
         <p>${task.need || 'Потребность пока не описана.'}</p>
-        <div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${item}</span>`).join('')}</div>
+        <div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${item}</span>`).join('')}</div></div>
         <button class="primary-button recommendation-details" type="button" data-task-id="${task.id}">Подробнее / Откликнуться</button>
       </article>
     `).join('') : '<p class="placeholder-text">Подходящих задач пока нет.</p>';
@@ -378,8 +398,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const setStep = (step) => {
     currentStep = step;
     wizardSteps.forEach((button) => {
-      const active = Number(button.dataset.step) === step;
+      const stepNumber = Number(button.dataset.step);
+      const active = stepNumber === step;
+      const complete = completedSteps.has(stepNumber) && !active;
+      button.disabled = stepNumber > unlockedStep;
       button.classList.toggle('is-active', active);
+      button.classList.toggle('is-complete', complete);
+      button.textContent = `${complete ? '✓ ' : ''}${button.dataset.label}`;
     });
 
     wizardPanels.forEach((panel) => {
@@ -490,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const tips = (result.missing || []).slice(0, 4).map((item) => {
       const fieldHint = window.fieldHints[item.field] || {};
-      return `<li><strong>+${item.potential_points} баллов · ${fieldHint.label || item.field}</strong><span>${item.hint}</span></li>`;
+      return `<li><strong>+${item.potential_points} ${plural(item.potential_points, ['балл', 'балла', 'баллов'])} · ${fieldHint.label || item.field}</strong><span>${item.hint}</span></li>`;
     });
     tipsList.innerHTML = tips.length ? tips.join('') : '<li>Задача полностью готова 🎉</li>';
 
@@ -550,6 +575,8 @@ document.addEventListener('DOMContentLoaded', () => {
     Object.assign(cardState, result.card || {});
     renderCardForm();
     await refreshScore();
+    completedSteps.add(2);
+    unlockedStep = Math.max(unlockedStep, 4);
     setStep(3);
   };
 
@@ -562,6 +589,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const result = window.mockApi?.analyze ? window.mockApi.analyze(payload) : { questions: [], filled_fields: [], missing_fields: [], mode: 'demo' };
     questions = result.questions || [];
     renderQuestions();
+    completedSteps.add(1);
+    unlockedStep = Math.max(unlockedStep, 2);
     setStep(2);
   });
 
@@ -629,6 +658,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const result = window.mockApi?.createTask ? window.mockApi.createTask({ card: cardState, confirmed: true }) : { id: 't1', card: cardState, score: 0, level: 'draft' };
     publishMessage.textContent = `Задача опубликована: ${result.id}. Место в каталоге будет обновлено после проверки.`;
+  });
+
+  wizardSteps.forEach((button) => {
+    button.dataset.label = button.textContent;
+    button.addEventListener('click', () => {
+      if (!button.disabled) setStep(Number(button.dataset.step));
+    });
   });
 
   renderCardForm();

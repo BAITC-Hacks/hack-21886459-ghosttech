@@ -6,7 +6,10 @@
   --text: #111827;
   --muted: #6B7280;
   --primary: #4F46E5;
+  --accent: #4F46E5;
   --primary-soft: rgba(79, 70, 229, 0.08);
+  --primary-border: rgba(79, 70, 229, 0.12);
+  --white: #FFFFFF;
   --draft: #9CA3AF;
   --draft-soft: #F3F4F6;
   --working: #3B82F6;
@@ -17,6 +20,11 @@
   --priority-soft: #FFFBEB;
   --danger: #EF4444;
   --success: #10B981;
+  --accepted: #047857;
+  --rejected: #B91C1C;
+  --rejected-soft: #FEF2F2;
+  --overlay: rgba(17, 24, 39, 0.35);
+  --panel-translucent: rgba(255, 255, 255, 0.5);
   --shadow: rgba(17, 24, 39, 0.03);
   --radius: 12px;
 }
@@ -80,7 +88,7 @@ h1 {
   padding: 9px 12px;
   background: var(--primary-soft);
   color: var(--primary);
-  border: 1px solid rgba(79, 70, 229, 0.12);
+  border: 1px solid var(--primary-border);
   border-radius: 999px;
   font-size: 0.86rem;
 }
@@ -177,6 +185,49 @@ main {
   background: var(--panel);
 }
 
+.level-card {
+  border-left-width: 4px;
+}
+
+.level-card.level-priority {
+  border-left-color: var(--priority);
+  background: var(--priority-soft);
+}
+
+.level-card.level-ready {
+  border-left-color: var(--ready);
+  background: var(--panel);
+}
+
+.level-card.level-working {
+  border-left-color: var(--working);
+  background: var(--panel);
+}
+
+.level-card.level-draft {
+  border-left-color: var(--draft);
+  background: var(--panel);
+}
+
+.task-level-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.task-refinement {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.task-readiness {
+  margin: 12px 0 0;
+  color: var(--text) !important;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .task-card-header,
 .task-card-footer,
 .proposal-header,
@@ -250,8 +301,8 @@ main {
 }
 
 .status-pending { background: var(--panel-alt); color: var(--muted); }
-.status-accepted { background: var(--ready-soft); color: #047857; }
-.status-rejected { background: #FEF2F2; color: #B91C1C; }
+.status-accepted { background: var(--ready-soft); color: var(--accepted); }
+.status-rejected { background: var(--rejected-soft); color: var(--rejected); }
 
 .team-layout {
   display: grid;
@@ -313,6 +364,22 @@ main {
   line-height: 1.4;
 }
 
+.profile-chips,
+.match-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-chips span,
+.match-tags span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.75rem;
+}
+
 .section-heading {
   display: flex;
   align-items: flex-end;
@@ -344,19 +411,22 @@ main {
 }
 
 .match-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   margin-top: auto;
   padding-top: 12px;
 }
 
 .match-tags span {
   padding: 4px 8px;
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  font-size: 0.75rem;
+}
+
+.match-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .team-proposal-row {
@@ -481,7 +551,17 @@ main {
 .wizard-step.is-active {
   background: var(--primary-soft);
   color: var(--primary);
-  border-color: rgba(79, 70, 229, 0.12);
+  border-color: var(--primary-border);
+}
+
+.wizard-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.wizard-step.is-complete {
+  color: var(--success);
+  border-color: var(--success);
 }
 
 .wizard-panel {
@@ -517,7 +597,7 @@ textarea,
 select,
 input {
   width: 100%;
-  background: #fff;
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--text);
@@ -546,7 +626,7 @@ textarea {
 
 .primary-button {
   background: var(--primary);
-  color: #fff;
+  color: var(--white);
   font-weight: 600;
 }
 
@@ -695,7 +775,7 @@ textarea {
 .breakdown-list li,
 .tips-list li {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--panel-translucent);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 10px;
@@ -857,12 +937,13 @@ textarea {
 .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .account-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .notice { padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
-.notice.is-error, .form-error { color: #B91C1C; }
+.notice.is-error, .form-error { color: var(--rejected); }
 .form-error:empty { display: none; }
 dialog { width: min(560px, calc(100% - 32px)); max-height: 90vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; color: var(--text); }
-dialog::backdrop { background: rgba(17, 24, 39, .35); }
+dialog::backdrop { background: var(--overlay); }
 button:disabled { opacity: .55; cursor: wait; }
-:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #catalog-more { margin-top: 18px; }
 .task-card, .proposal-card { min-width: 0; overflow-wrap: anywhere; }
 .progress-actions { margin-top: 14px; }
