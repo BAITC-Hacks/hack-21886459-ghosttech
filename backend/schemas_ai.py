@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCORED_FIELDS = (
     "context",
@@ -45,8 +45,15 @@ class AnswerInput(AIInput):
 class BuildCardInput(AnalyzeInput):
     answers: list[AnswerInput] = Field(default_factory=list, max_length=10)
 
+    @field_validator("answers")
+    @classmethod
+    def skip_empty_answers(cls, answers):
+        return [answer for answer in answers if answer.answer]
+
 
 class Question(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     id: str = Field(min_length=1, max_length=100)
     field: FieldName
     question: str = Field(min_length=1, max_length=300)
@@ -56,6 +63,11 @@ class AnalyzeModel(BaseModel):
     questions: list[Question] = Field(min_length=1, max_length=5)
     filled_fields: list[FieldName] = Field(default_factory=list)
     missing_fields: list[FieldName] = Field(default_factory=list)
+
+    @field_validator("questions", mode="before")
+    @classmethod
+    def limit_questions(cls, questions):
+        return questions[:5] if isinstance(questions, list) else questions
 
     @model_validator(mode="after")
     def validate_fields(self):
