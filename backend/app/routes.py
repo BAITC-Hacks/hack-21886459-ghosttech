@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -107,13 +107,13 @@ def task_summaries(db, query):
 
 
 @router.post("/tasks/analyze", response_model=AnalyzeRead, tags=["assistant"])
-def analyze(data: AnalyzeRequest):
-    return assistant.analyze(data)
+async def analyze(data: AnalyzeRequest, request: Request):
+    return await assistant.analyze(data, request.app.state.settings)
 
 
 @router.post("/tasks/build-card", response_model=BuildRead, tags=["assistant"])
-def build_card(data: BuildRequest):
-    return assistant.build_card(data)
+async def build_card(data: BuildRequest, request: Request):
+    return await assistant.build_card(data, request.app.state.settings)
 
 
 @router.post("/tasks/score", response_model=Score, tags=["assistant"])
@@ -237,6 +237,25 @@ def get_proposals(task_id: str, db: Db):
         proposal_read(p)
         for p in db.scalars(
             select(Proposal).where(Proposal.task_id == task_id).order_by(Proposal.created_at)
+        )
+    ]
+
+
+@router.get("/proposals", response_model=list[ProposalRead], tags=["proposals"])
+def list_proposals(
+    db: Db,
+    team_id: str = Query("", max_length=32),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    query = select(Proposal)
+    if team_id:
+        find(db, Team, team_id)
+        query = query.where(Proposal.team_id == team_id)
+    return [
+        proposal_read(p)
+        for p in db.scalars(
+            query.order_by(Proposal.created_at, Proposal.id).offset(offset).limit(limit)
         )
     ]
 

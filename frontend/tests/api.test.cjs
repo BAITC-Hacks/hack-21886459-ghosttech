@@ -44,3 +44,11 @@ test('network errors have a readable message', async () => {
   const api = client(async () => { throw new Error('ECONNREFUSED'); });
   await assert.rejects(api.getHealth(), /FastAPI/);
 });
+
+test('team workspace loads server proposals with filters and pagination', async () => {
+  const api = client(async (url) => {
+    assert.equal(url, '/api/proposals?team_id=team1&offset=0&limit=100');
+    return { ok: true, status: 200, json: async () => [{ id: 'p1', team_id: 'team1' }] };
+  }, '8000');
+  assert.deepEqual(await api.getTeamProposals({ team_id: 'team1', offset: 0, limit: 100 }), [{ id: 'p1', team_id: 'team1' }]);
+});

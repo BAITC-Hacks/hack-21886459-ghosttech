@@ -50,7 +50,12 @@ def create_app(settings: Settings | None = None):
     @api.get("/health", tags=["system"])
     def health(db: Db):
         db.execute(text("SELECT 1"))
-        return {"status": "ok", "database": engine.dialect.name, "mode": "demo"}
+        return {
+            "status": "ok",
+            "database": engine.dialect.name,
+            "mode": settings.assistant_mode,
+            "ai_configured": bool(settings.openai_api_key.get_secret_value().strip()),
+        }
 
     api.include_router(routes.router)
     app.include_router(api)

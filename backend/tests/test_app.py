@@ -19,7 +19,9 @@ from app.seed import seed_database
 
 @pytest.fixture
 def settings(tmp_path):
-    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path / 'test.sqlite3'}")
+    settings = Settings(
+        _env_file=None, database_url=f"sqlite:///{tmp_path / 'test.sqlite3'}", ai_mode="demo"
+    )
     engine = create_db_engine(settings)
     migrate(engine)
     engine.dispose()
@@ -163,6 +165,32 @@ def test_team_management_and_validation(client):
     assert client.patch("/api/teams/missing", json={"name": "X"}).status_code == 404
 
 
+def test_team_proposals_filter_pagination_and_progress(client):
+    first, second = team(client, "First"), team(client, "Second")
+    task_a, task_b = task(client), task(client)
+    proposal_a = client.post(
+        f"/api/tasks/{task_a['id']}/proposals", json=proposal_payload(first["id"])
+    ).json()
+    client.post(f"/api/tasks/{task_b['id']}/proposals", json=proposal_payload(first["id"]))
+    client.post(f"/api/tasks/{task_a['id']}/proposals", json=proposal_payload(second["id"]))
+    client.patch(f"/api/proposals/{proposal_a['id']}/decision", json={"decision": "accepted"})
+    client.post(f"/api/proposals/{proposal_a['id']}/progress", json={"stage": "prototype"})
+    rows = client.get("/api/proposals", params={"team_id": first["id"]}).json()
+    assert len(rows) == 2
+    assert all(row["team_id"] == first["id"] for row in rows)
+    accepted = next(row for row in rows if row["id"] == proposal_a["id"])
+    assert accepted["status"] == "accepted" and accepted["stages_done"] == ["prototype"]
+    assert (
+        client.get(
+            "/api/proposals", params={"team_id": first["id"], "offset": 1, "limit": 1}
+        ).json()
+        == rows[1:]
+    )
+    assert len(client.get("/api/proposals").json()) == 3
+    assert client.get("/api/proposals?team_id=missing").status_code == 404
+    assert client.get("/api/proposals?limit=101").status_code == 422
+
+
 def test_assistant_scoring_and_boundaries(client):
     assert score_card(Card()).score == 0
     full = Card(**{field: "Полное описание " * 4 for field in Card.model_fields})
@@ -228,14 +256,14 @@ def test_seed_idempotency_and_restart(settings):
     engine = create_db_engine(settings)
     migrate(engine)
     with Session(engine) as db, db.begin():
-        assert seed_database(db) == {"tasks": 5, "teams": 5, "proposals": 5}
+        assert seed_database(db) == {"tasks": 5, "teams": 5, "proposals": 7}
         db.get(Task, "t1").title = "Edited title"
     with Session(engine) as db, db.begin():
         assert seed_database(db) == {"tasks": 0, "teams": 0, "proposals": 0}
         assert db.get(Task, "t1").title == "Edited title"
         assert db.scalar(select(func.count()).select_from(Task)) == 5
         assert db.scalar(select(func.count()).select_from(Team)) == 5
-        assert db.scalar(select(func.count()).select_from(Proposal)) == 5
+        assert db.scalar(select(func.count()).select_from(Proposal)) == 7
         assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
     assert "users" not in inspect(engine).get_table_names()
     engine.dispose()

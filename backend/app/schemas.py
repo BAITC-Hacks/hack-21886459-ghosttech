@@ -179,17 +179,33 @@ class AnalyzeRequest(Input):
         return self
 
 
-class Question(BaseModel):
-    id: str
+class Question(Input):
+    id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
     field: CardField
-    question: str
+    question: str = Field(min_length=1, max_length=1000)
 
 
-class AnalyzeRead(BaseModel):
-    questions: list[Question]
-    filled_fields: list[CardField]
-    missing_fields: list[CardField]
-    mode: Literal["demo"] = "demo"
+class AnalysisResult(Input):
+    questions: list[Question] = Field(min_length=3, max_length=5)
+    filled_fields: list[CardField] = Field(max_length=11)
+    missing_fields: list[CardField] = Field(max_length=11)
+
+    @model_validator(mode="after")
+    def unique_questions_and_fields(self):
+        if len({q.id for q in self.questions}) != len(self.questions):
+            raise ValueError("Идентификаторы вопросов должны быть уникальными")
+        if len({q.field for q in self.questions}) != len(self.questions):
+            raise ValueError("Один вопрос на каждое поле")
+        for fields in (self.filled_fields, self.missing_fields):
+            if len(set(fields)) != len(fields):
+                raise ValueError("Список полей содержит повторения")
+        if set(self.filled_fields) & set(self.missing_fields):
+            raise ValueError("Поле не может быть одновременно заполненным и отсутствующим")
+        return self
+
+
+class AnalyzeRead(AnalysisResult):
+    mode: Literal["demo", "openai"] = "demo"
 
 
 class Answer(Input):
@@ -208,6 +224,10 @@ class BuildRequest(AnalyzeRequest):
         return self
 
 
-class BuildRead(BaseModel):
+class BuildResult(Input):
     card: Card
-    warnings: list[str]
+    warnings: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(max_length=20)
+
+
+class BuildRead(BuildResult):
+    mode: Literal["demo", "openai"] = "demo"

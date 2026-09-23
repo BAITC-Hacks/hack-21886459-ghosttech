@@ -629,6 +629,77 @@
         }
       }
     },
+    "/api/proposals": {
+      "get": {
+        "tags": [
+          "proposals"
+        ],
+        "summary": "List Proposals",
+        "operationId": "list_proposals_api_proposals_get",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "default": "",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalRead"
+                  },
+                  "title": "Response List Proposals Api Proposals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/proposals/{proposal_id}/decision": {
       "patch": {
         "tags": [
@@ -743,6 +814,8 @@
               "$ref": "#/components/schemas/Question"
             },
             "type": "array",
+            "maxItems": 5,
+            "minItems": 3,
             "title": "Questions"
           },
           "filled_fields": {
@@ -763,6 +836,7 @@
               ]
             },
             "type": "array",
+            "maxItems": 11,
             "title": "Filled Fields"
           },
           "missing_fields": {
@@ -783,15 +857,20 @@
               ]
             },
             "type": "array",
+            "maxItems": 11,
             "title": "Missing Fields"
           },
           "mode": {
             "type": "string",
-            "const": "demo",
+            "enum": [
+              "demo",
+              "openai"
+            ],
             "title": "Mode",
             "default": "demo"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "questions",
@@ -901,12 +980,25 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 1000,
+              "minLength": 1
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Warnings"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "demo",
+              "openai"
+            ],
+            "title": "Mode",
+            "default": "demo"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "card",
@@ -1270,6 +1362,9 @@
         "properties": {
           "id": {
             "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
             "title": "Id"
           },
           "field": {
@@ -1291,9 +1386,12 @@
           },
           "question": {
             "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
             "title": "Question"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",

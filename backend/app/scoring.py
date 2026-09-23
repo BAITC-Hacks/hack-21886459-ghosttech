@@ -38,7 +38,11 @@ def score_card(card: Card) -> Score:
                 "label": HINTS[field]["label"],
                 "max": maximum,
                 "earned": earned,
-                "reason": "Проверка по формуле рейтинга",
+                "reason": (
+                    "Поле заполнено"
+                    if earned == maximum
+                    else HINTS[field]["hint_empty" if not earned else "hint_partial"]
+                ),
             }
         )
         if earned < maximum:

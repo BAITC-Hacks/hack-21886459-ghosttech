@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GhostTech — задачи и команды</title>
     <link rel="stylesheet" href="./styles.css">
-    <script src="./mock.js" defer></script>
     <script src="./api.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
@@ -172,7 +171,7 @@
               <div class="panel-header team-heading">
                 <div>
                   <p class="eyebrow">Рабочее пространство команды</p>
-                  <h2 id="team-name">Команда</h2>
+                  <h2 id="team-heading-name">Команда</h2>
                   <p id="team-summary" class="muted"></p>
                 </div>
                 <label class="team-selector">
@@ -215,20 +214,20 @@
                 <label for="response-team">От команды</label>
                 <select id="response-team" required></select>
                 <label for="response-idea">Идея решения</label>
-                <textarea id="response-idea" required placeholder="Коротко опишите, что предложит команда"></textarea>
+                <textarea id="response-idea" required maxlength="5000" placeholder="Коротко опишите, что предложит команда"></textarea>
                 <small id="response-idea-error" class="field-error"></small>
                 <label for="response-plan">План работы</label>
-                <textarea id="response-plan" required placeholder="Опишите первые шаги и результат"></textarea>
+                <textarea id="response-plan" required maxlength="5000" placeholder="Опишите первые шаги и результат"></textarea>
                 <small id="response-plan-error" class="field-error"></small>
                 <label for="response-deadline">Срок</label>
                 <input id="response-deadline" type="date" required>
                 <small id="response-deadline-error" class="field-error"></small>
                 <label for="response-prototype">Ссылка на прототип</label>
-                <input id="response-prototype" type="text" required placeholder="https://example.com/prototype">
+                <input id="response-prototype" type="url" required maxlength="2048" placeholder="https://example.com/prototype">
                 <small id="response-prototype-error" class="field-error"></small>
                 <button id="response-submit-button" class="primary-button" type="submit">Отправить отклик</button>
-                <p id="response-message" class="publish-message" aria-live="polite"></p>
-              </form>
+                </form>
+              <p id="response-message" class="publish-message" aria-live="polite"></p>
             </aside>
           </div>
         </section>
@@ -244,19 +243,6 @@
         <div class="field-block"><label for="team-tech">Технологии, через запятую</label><input id="team-tech" name="tech" maxlength="1000"></div>
         <p id="team-error" class="form-error" role="alert"></p>
         <button class="primary-button" type="submit">Сохранить команду</button>
-      </form>
-    </dialog>
-    <dialog id="proposal-dialog" aria-labelledby="proposal-title">
-      <form id="proposal-form">
-        <div class="panel-header"><h2 id="proposal-title">Отклик на задачу</h2><button type="button" class="secondary-button" data-close="proposal-dialog" aria-label="Закрыть">×</button></div>
-        <p id="proposal-target" class="muted"></p>
-        <div class="field-block"><label for="proposal-team">Команда</label><select id="proposal-team" name="team_id" required></select></div>
-        <div class="field-block"><label for="proposal-idea">Идея</label><textarea id="proposal-idea" name="idea" required maxlength="5000"></textarea></div>
-        <div class="field-block"><label for="proposal-plan">План</label><textarea id="proposal-plan" name="plan" required maxlength="5000"></textarea></div>
-        <div class="field-block"><label for="proposal-deadline">Срок</label><input id="proposal-deadline" name="deadline" type="date" required></div>
-        <div class="field-block"><label for="proposal-url">Ссылка на прототип (необязательно)</label><input id="proposal-url" name="prototype_url" type="url" maxlength="2048" placeholder="https://"></div>
-        <p id="proposal-error" class="form-error" role="alert"></p>
-        <button class="primary-button" type="submit">Отправить отклик</button>
       </form>
     </dialog>
   </body>

@@ -14,7 +14,7 @@
 {"draft_text":"Нужен учёт посещаемости кружков","topic":"образование"}
 ```
 
-Ответ: `questions: [{id, field, question}]`, `filled_fields`, `missing_fields`, `mode: "demo"`.
+Ответ: `questions: [{id, field, question}]`, `filled_fields`, `missing_fields`, `mode: "demo" | "openai"`. Вопросов от 3 до 5, идентификаторы и поля уникальны.
 
 `POST /tasks/build-card`:
 
@@ -22,9 +22,13 @@
 {"draft_text":"Нужен учёт посещаемости","topic":"образование","answers":[{"question_id":"q1","field":"data","answer":"Есть журнал посещений"}]}
 ```
 
-Ответ: `card` и массив строк `warnings`. Поле `field` ограничено ключами карточки, повторные ответы для одного поля запрещены.
+Ответ: `card`, массив строк `warnings` и `mode: "demo" | "openai"`. Поле `field` ограничено ключами карточки, повторные ответы для одного поля запрещены.
 
 `POST /tasks/score`: `{"card": {...}}`. Ответ: `score`, `level`, `breakdown: [{field,label,max,earned,reason}]`, `missing: [{field,hint,potential_points}]`.
+
+В режиме OpenAI помощник возвращает `429` при лимите, `503` при отсутствии ключа или доступа, `504` при тайм-ауте и `502` при сбое провайдера или некорректном ответе. Поле `detail` содержит сообщение на русском; ключи, исходный ответ провайдера и внутренние исключения не возвращаются. Ошибки не переключают запрос в деморежим.
+
+`GET /health`: `{status, database, mode, ai_configured}`. Режим отражает конфигурацию, а `ai_configured` — наличие непустого ключа; это не проверка связи с OpenAI.
 
 ## Задачи
 
@@ -68,6 +72,10 @@
 Ссылка необязательна; допускается только HTTP/HTTPS. Ответ `201`:
 `{id, task_id, team_id, idea, plan, deadline, prototype_url, status, stages_done, created_at}`.
 `GET /tasks/{id}/proposals` возвращает массив таких объектов.
+
+`GET /proposals?team_id={id}&offset=0&limit=100` возвращает отклики выбранной команды
+для вкладки «Команда». Без `team_id` возвращает все отклики. `limit` от 1 до 100;
+неизвестная команда — `404`. Статус и подтверждённые этапы берутся из базы данных.
 
 `PATCH /proposals/{id}/decision`: `{"decision":"accepted"}` или `{"decision":"rejected"}`. Повторное решение — `409`.
 

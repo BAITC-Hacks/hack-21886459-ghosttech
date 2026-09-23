@@ -1,678 +1,370 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const $ = (selector) => document.querySelector(selector);
+  const api = window.api;
+  const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
   const plural = (number, forms) => {
-    const value = Math.abs(number) % 100;
-    const last = value % 10;
-    if (value > 10 && value < 20) return forms[2];
-    if (last === 1) return forms[0];
-    if (last >= 2 && last <= 4) return forms[1];
-    return forms[2];
+    const value = Math.abs(number) % 100, last = value % 10;
+    return value > 10 && value < 20 ? forms[2] : last === 1 ? forms[0] : last >= 2 && last <= 4 ? forms[1] : forms[2];
+  };
+  const fields = [
+    ['title', 'Название задачи'], ['topic', 'Тема'], ['context', 'Контекст и проблема'],
+    ['need', 'Потребность'], ['users', 'Пользователи и участники'], ['data', 'Данные и материалы'],
+    ['constraints', 'Ограничения'], ['expected_result', 'Ожидаемый результат'],
+    ['success_criteria', 'Критерии успеха'], ['contact', 'Контакт'], ['interaction_format', 'Формат взаимодействия'],
+  ];
+  const levelMeta = {
+    draft: { label: 'Черновик', color: '#9CA3AF' }, working: { label: 'Рабочая', color: '#3B82F6' },
+    ready: { label: 'Готовая', color: '#10B981' }, priority: { label: 'Приоритетная', color: '#F59E0B' },
+  };
+  const statuses = { pending: 'На рассмотрении', accepted: 'Принят', rejected: 'Отклонён' };
+  const stages = { prototype: ['Прототип', 10], testing: ['Проверено с бизнесом', 20], final: ['Результат принят', 30] };
+  let myTeam = null, availableTeams = [], questions = [], publishedId = null;
+  let card = Object.fromEntries(fields.map(([key]) => [key, '']));
+  let catalogTasks = [], catalogRevision = 0, proposalRevision = 0, scoreRevision = 0, scoreTimer;
+  let selectedTeamId = null, teamTasks = [], teamProposals = [], selectedTask = null, teamRevision = 0;
+  let unlockedStep = 1, currentStep = 1, assistantBusy = false;
+  const completedSteps = new Set();
+  const readiness = {
+    draft: 'Потребуются уточнения у бизнеса', working: 'Возможны уточнения',
+    ready: 'Можно начинать без уточнений', priority: 'Полностью готова к работе',
   };
 
-  const fallbackFieldHints = {
-    title: { label: 'Название', max: 0, hint_empty: 'Добавьте короткое название задачи — без него публикация невозможна.', hint_partial: '' },
-    topic: { label: 'Тема', max: 0, hint_empty: 'Выберите тему — по ней студенты фильтруют каталог.', hint_partial: '' },
-    context: { label: 'Контекст', max: 10, hint_empty: 'Опишите, как всё устроено сейчас: кто и как решает эту задачу сегодня.', hint_partial: 'Добавьте деталей о текущей ситуации: что именно происходит и где неудобно.' },
-    need: { label: 'Потребность', max: 10, hint_empty: 'Сформулируйте, что именно нужно изменить или улучшить.', hint_partial: 'Уточните потребность: какую проблему должно снять решение.' },
-    data: { label: 'Данные и материалы', max: 20, hint_empty: 'Укажите, какие данные есть: выгрузки, таблицы, примеры документов, источники.', hint_partial: 'Уточните формат и объём данных: например, «Excel за 2 месяца, ~300 строк».' },
-    expected_result: { label: 'Ожидаемый результат', max: 15, hint_empty: 'Опишите, что команда должна сдать в итоге: прототип, дашборд, бот, отчёт.', hint_partial: 'Конкретизируйте результат: что именно должно работать в конце.' },
-    success_criteria: { label: 'Критерии успеха', max: 15, hint_empty: 'Добавьте измеримый признак успеха, например «отметка посещаемости занимает до 1 минуты».', hint_partial: 'Добавьте число или процент — так критерий станет измеримым.' },
-    constraints: { label: 'Ограничения', max: 10, hint_empty: 'Укажите сроки, технологии, доступы или другие границы работы.', hint_partial: 'Уточните ограничения: срок, стек, доступ к системам.' },
-    users: { label: 'Пользователи', max: 10, hint_empty: 'Опишите, кто будет пользоваться решением: сотрудники, клиенты, родители.', hint_partial: 'Уточните пользователей: роли, сколько их, в какой ситуации они работают.' },
-    contact: { label: 'Контакт', max: 5, hint_empty: 'Укажите контакт для связи с командой (email).', hint_partial: '' },
-    interaction_format: { label: 'Формат взаимодействия', max: 5, hint_empty: 'Опишите формат: как часто созвоны, как даёте обратную связь.', hint_partial: '' }
-  };
-
-  window.fieldHints = fallbackFieldHints;
-  const fieldHintsReady = fetch('../prompts/field_hints.json')
-    .then((response) => response.ok ? response.json() : Promise.reject(new Error('field_hints.json недоступен')))
-    .then((hints) => {
-      window.fieldHints = hints;
-      return hints;
-    })
-    .catch(() => fallbackFieldHints);
-
-  const tabButtons = document.querySelectorAll('[data-tab]');
-  const tabPanels = document.querySelectorAll('.tab-panel');
-
-  tabButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const target = button.dataset.tab;
-
-      tabButtons.forEach((item) => {
-        const active = item === button;
-        item.classList.toggle('is-active', active);
-        item.setAttribute('aria-selected', String(active));
-      });
-
-      tabPanels.forEach((panel) => {
-        const active = panel.id === target;
-        panel.hidden = !active;
-        panel.classList.toggle('is-active', active);
-      });
-
-      if (target === 'catalog') renderCatalog();
-      if (target === 'business-proposals') {
-        if (!proposalTask.options.length) {
-          proposalTask.innerHTML = (window.mockApi?.listTasks?.() || [])
-            .map((task) => `<option value="${task.id}">${task.title}</option>`)
-            .join('');
-        }
-        renderProposals();
-      }
-      if (target === 'team') renderTeam();
-    });
+  function notify(message, isError = false) {
+    $('#app-message').textContent = message;
+    $('#app-message').hidden = !message;
+    $('#app-message').classList.toggle('is-error', isError);
+  }
+  async function run(button, action, errorTarget) {
+    if (button) button.disabled = true;
+    try { await action(); }
+    catch (error) {
+      if (errorTarget) errorTarget.textContent = error.message;
+      else notify(error.message, true);
+    } finally {
+      if (button) button.disabled = false;
+      if (button === $('#publish-button')) updatePublish();
+    }
+  }
+  function onClick(selector, action) {
+    $(selector).addEventListener('click', (event) => run(event.currentTarget, action));
+  }
+  async function withAssistant(buttonId, label, action) {
+    const button = $(buttonId), previous = button.textContent;
+    const controls = [$('#analyze-button'), $('#build-card-button'), $('#sample-button'), $('#draft-text'), $('#task-topic'), $('#confirm-check'), $('#publish-button'), ...document.querySelectorAll('#question-list textarea, #card-form textarea, [data-tab], .wizard-step')];
+    const disabled = controls.map((control) => control.disabled);
+    assistantBusy = true;
+    controls.forEach((control) => { control.disabled = true; });
+    button.textContent = label; button.setAttribute('aria-busy', 'true'); notify('');
+    try { return await action(); }
+    finally {
+      controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      button.textContent = previous; button.removeAttribute('aria-busy');
+      assistantBusy = false; setStep(currentStep); updatePublish();
+    }
+  }
+  document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
+  function fillTeamForm() {
+    myTeam = availableTeams.find((team) => team.id === $('#team-choice').value) || null;
+    for (const key of ['name', 'interests', 'skills', 'tech']) {
+      $(`#team-${key}`).value = key === 'name' ? myTeam?.name || '' : (myTeam?.[key] || []).join(', ');
+    }
+  }
+  async function openTeam() {
+    availableTeams = await allTeams();
+    $('#team-choice').innerHTML = '<option value="">Новая команда</option>' + availableTeams.map((team) => `<option value="${escape(team.id)}">${escape(team.name)}</option>`).join('');
+    fillTeamForm();
+    $('#team-error').textContent = ''; $('#team-dialog').showModal();
+  }
+  onClick('#team-button', openTeam);
+  $('#team-choice').addEventListener('change', fillTeamForm);
+  $('#team-form').addEventListener('submit', (event) => {
+    event.preventDefault(); $('#team-error').textContent = '';
+    run(event.currentTarget.querySelector('[type="submit"]'), async () => {
+      const payload = { name: $('#team-name').value };
+      for (const key of ['interests', 'skills', 'tech']) payload[key] = $(`#team-${key}`).value.split(',').map((v) => v.trim()).filter(Boolean);
+      myTeam = await (myTeam ? api.updateTeam(myTeam.id, payload) : api.createTeam(payload));
+      selectedTeamId = myTeam.id;
+      $('#team-dialog').close(); notify('Команда сохранена. Теперь можно отправить отклик в каталоге.');
+      if (!$('#team').hidden) await renderTeam();
+    }, $('#team-error'));
   });
 
-  const modeLabel = document.querySelector('#mode-label');
-  if (modeLabel) {
-    modeLabel.textContent = window.api && window.api.USE_MOCK ? 'Демо-режим (без API-ключа)' : 'Режим: AI';
+  async function showTab(target) {
+    document.querySelectorAll('[data-tab]').forEach((button) => {
+      const active = button.dataset.tab === target;
+      button.classList.toggle('is-active', active); button.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.tab-panel').forEach((panel) => {
+      panel.hidden = panel.id !== target; panel.classList.toggle('is-active', panel.id === target);
+    });
+    if (target === 'catalog') await renderCatalog();
+    if (target === 'business-proposals') await loadProposals();
+    if (target === 'team') await renderTeam();
   }
+  document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => run(null, () => showTab(button.dataset.tab))));
+  function setStep(step) {
+    currentStep = step;
+    document.querySelectorAll('.wizard-step').forEach((button) => {
+      const number = Number(button.dataset.step), complete = completedSteps.has(number) && number !== step;
+      button.dataset.label ||= button.textContent;
+      button.disabled = assistantBusy || number > unlockedStep;
+      button.textContent = `${complete ? '✓ ' : ''}${button.dataset.label}`;
+      button.classList.toggle('is-complete', complete);
+      button.classList.toggle('is-active', number === step);
+      if (Number(button.dataset.step) === step) button.setAttribute('aria-current', 'step');
+      else button.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.wizard-panel').forEach((panel) => { panel.hidden = Number(panel.dataset.panel) !== step; });
+  }
+  document.querySelectorAll('.wizard-step').forEach((button) => button.addEventListener('click', () => setStep(Number(button.dataset.step))));
+  function updatePublish() {
+    $('#publish-button').disabled = assistantBusy || !($('#confirm-check').checked && card.title.trim() && card.topic.trim());
+  }
+  function renderFields() {
+    $('#card-form').innerHTML = fields.map(([key, label]) => `<div class="field-block ${['contact', 'interaction_format'].includes(key) ? '' : 'full'}"><label for="field-${key}" id="label-${key}">${label}</label><textarea id="field-${key}" data-field="${key}" maxlength="${key === 'title' ? 200 : key === 'topic' ? 100 : key === 'contact' ? 500 : 5000}">${escape(card[key])}</textarea></div>`).join('');
+  }
+  async function refreshScore() {
+    const version = ++scoreRevision;
+    const result = await api.scoreCard({ card: { ...card } });
+    if (version !== scoreRevision) return;
+    const meta = levelMeta[result.level];
+    $('#score-level').textContent = meta.label; $('#score-level').className = `level-badge level-${result.level}`;
+    $('#score-value').textContent = result.score;
+    $('#score-progress').style.width = `${result.score}%`; $('#score-progress').style.background = meta.color;
+    $('#breakdown-list').innerHTML = result.breakdown.map((row) => `<li class="breakdown-item"><div class="breakdown-line"><strong>${escape(row.label)} · ${row.earned}/${row.max}${row.earned === row.max ? ' ✓' : ''}</strong><span>${escape(row.reason)}</span></div><span class="field-progress"><span style="width: ${row.max ? Math.round(row.earned / row.max * 100) : 0}%"></span></span></li>`).join('');
+    $('#tips-list').innerHTML = result.missing.length ? result.missing.slice(0, 4).map((row) => `<li><strong>+${row.potential_points} ${plural(row.potential_points, ['балл', 'балла', 'баллов'])} · ${escape(result.breakdown.find((item) => item.field === row.field)?.label || row.field)}</strong><span>${escape(row.hint)}</span></li>`).join('') : '<li>Задача полностью готова 🎉</li>';
+    for (const [key, label] of fields) {
+      const row = result.breakdown.find((row) => row.field === key);
+      $(`#label-${key}`).textContent = `${label} · ${row ? `${row.earned}/${row.max}${row.earned === row.max ? ' ✓' : ''}` : 'обязательно'}`;
+    }
+  }
+  $('#card-form').addEventListener('input', (event) => {
+    if (!event.target.dataset.field) return;
+    card[event.target.dataset.field] = event.target.value;
+    completedSteps.delete(4);
+    $('#confirm-check').checked = false; updatePublish();
+    ++scoreRevision; clearTimeout(scoreTimer);
+    scoreTimer = setTimeout(() => run(null, refreshScore), 250);
+  });
+  onClick('#sample-button', async () => {
+    $('#draft-text').value = 'Нужно вести учёт посещаемости кружков. Сейчас всё в бумажном журнале и листках. Хочется, чтобы родители видели, кто приходил, а руководитель видел статистику по группам.';
+    $('#task-topic').value = 'образование'; publishedId = null; questions = [];
+    completedSteps.clear(); unlockedStep = 1; setStep(1);
+    card = Object.fromEntries(fields.map(([key]) => [key, ''])); renderFields();
+    $('#confirm-check').checked = false; $('#publish-message').textContent = ''; updatePublish();
+    $('#question-list').replaceChildren(); $('#questions-counter').textContent = '0 вопросов';
+    await refreshScore();
+  });
+  onClick('#analyze-button', () => withAssistant('#analyze-button', 'Анализируем…', async () => {
+    const result = await api.analyzeTask({ draft_text: $('#draft-text').value, topic: $('#task-topic').value });
+    questions = result.questions;
+    $('#question-list').innerHTML = questions.map((q) => `<div class="question-item"><small>${escape(q.field)}</small><label for="answer-${escape(q.id)}">${escape(q.question)}</label><textarea id="answer-${escape(q.id)}" maxlength="5000" placeholder="Напишите ответ..."></textarea></div>`).join('');
+    $('#questions-counter').textContent = `${questions.length} ${plural(questions.length, ['вопрос', 'вопроса', 'вопросов'])}`;
+    completedSteps.clear(); completedSteps.add(1); unlockedStep = 2;
+    $('#confirm-check').checked = false; updatePublish();
+    setStep(2); notify('');
+  }));
+  onClick('#build-card-button', () => withAssistant('#build-card-button', 'Собираем карточку…', async () => {
+    const result = await api.buildCard({ draft_text: $('#draft-text').value, topic: $('#task-topic').value,
+      answers: questions.map((q) => ({ question_id: q.id, field: q.field, answer: document.getElementById(`answer-${q.id}`).value })) });
+    card = result.card; publishedId = null; $('#confirm-check').checked = false;
+    completedSteps.add(2); unlockedStep = 4;
+    renderFields(); updatePublish(); await refreshScore(); setStep(3);
+    if (result.warnings.length) notify(result.warnings.join(' '));
+  }));
+  $('#confirm-check').addEventListener('change', updatePublish);
+  onClick('#publish-button', async () => {
+    if (!$('#confirm-check').checked || !card.title.trim() || !card.topic.trim()) return;
+    const payload = { card: { ...card }, confirmed: $('#confirm-check').checked };
+    const task = await (publishedId ? api.updateTask(publishedId, payload) : api.createTask(payload));
+    publishedId = task.id;
+    completedSteps.add(4); setStep(4);
+    $('#publish-message').textContent = 'Задача сохранена и опубликована в каталоге.';
+  });
 
-  const CARD_FIELDS = [
-    'title',
-    'topic',
-    'context',
-    'need',
-    'users',
-    'data',
-    'constraints',
-    'expected_result',
-    'success_criteria',
-    'contact',
-    'interaction_format'
-  ];
-
-  const wizardSteps = Array.from(document.querySelectorAll('.wizard-step'));
-  const wizardPanels = Array.from(document.querySelectorAll('.wizard-panel'));
-  const draftText = document.querySelector('#draft-text');
-  const taskTopic = document.querySelector('#task-topic');
-  const analyzeButton = document.querySelector('#analyze-button');
-  const sampleButton = document.querySelector('#sample-button');
-  const buildCardButton = document.querySelector('#build-card-button');
-  const questionList = document.querySelector('#question-list');
-  const questionsCounter = document.querySelector('#questions-counter');
-  const cardForm = document.querySelector('#card-form');
-  const scoreLevel = document.querySelector('#score-level');
-  const scoreValue = document.querySelector('#score-value');
-  const scoreProgress = document.querySelector('#score-progress');
-  const breakdownList = document.querySelector('#breakdown-list');
-  const tipsList = document.querySelector('#tips-list');
-  const confirmCheck = document.querySelector('#confirm-check');
-  const publishButton = document.querySelector('#publish-button');
-  const publishMessage = document.querySelector('#publish-message');
-  const catalogTopic = document.querySelector('#catalog-topic');
-  const catalogLevel = document.querySelector('#catalog-level');
-  const catalogCounter = document.querySelector('#catalog-counter');
-  const catalogList = document.querySelector('#catalog-list');
-  const proposalTask = document.querySelector('#proposal-task');
-  const proposalList = document.querySelector('#proposal-list');
-  const teamSelect = document.querySelector('#team-select');
-  const teamName = document.querySelector('#team-name');
-  const teamSummary = document.querySelector('#team-summary');
-  const teamProfile = document.querySelector('#team-profile');
-  const recommendationCounter = document.querySelector('#recommendation-counter');
-  const recommendationList = document.querySelector('#recommendation-list');
-  const teamProposalsList = document.querySelector('#team-proposals-list');
-  const teamDetailPanel = document.querySelector('#team-detail-panel');
-  const detailTitle = document.querySelector('#detail-title');
-  const detailContent = document.querySelector('#detail-content');
-  const closeDetailButton = document.querySelector('#close-detail-button');
-  const responseForm = document.querySelector('#response-form');
-  const responseTeam = document.querySelector('#response-team');
-  const responseIdea = document.querySelector('#response-idea');
-  const responsePlan = document.querySelector('#response-plan');
-  const responseDeadline = document.querySelector('#response-deadline');
-  const responsePrototype = document.querySelector('#response-prototype');
-  const responseSubmitButton = document.querySelector('#response-submit-button');
-  const responseMessage = document.querySelector('#response-message');
-
-  let currentStep = 1;
-  let questions = [];
-  let cardState = {
-    title: '',
-    topic: '',
-    context: '',
-    need: '',
-    users: '',
-    data: '',
-    constraints: '',
-    expected_result: '',
-    success_criteria: '',
-    contact: '',
-    interaction_format: ''
-  };
-  let selectedTeam = null;
-  let selectedRecommendation = null;
-  let unlockedStep = 1;
-  const completedSteps = new Set();
+  async function renderCatalog(append = false) {
+    const version = ++catalogRevision;
+    const tasks = await api.getTasks({ topic: $('#catalog-topic').value, level: $('#catalog-level').value,
+      offset: append ? catalogTasks.length : 0, limit: 50 });
+    if (version !== catalogRevision) return;
+    catalogTasks = append ? [...catalogTasks, ...tasks] : tasks;
+    $('#catalog-counter').textContent = `${catalogTasks.length} ${plural(catalogTasks.length, ['задача', 'задачи', 'задач'])}`;
+    $('#catalog-more').hidden = tasks.length < 50;
+    $('#catalog-list').innerHTML = catalogTasks.length ? catalogTasks.map((task) => {
+      return `<article class="task-card level-card level-${task.level}"><div class="task-card-header"><div class="task-level-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span>${task.level === 'draft' ? '<span class="task-refinement">Требует уточнения</span>' : ''}</div><strong>${task.score}/100</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p><p>${escape(task.need || 'Потребность пока не описана.')}</p><p class="task-readiness">${readiness[task.level]}</p><div class="task-card-footer"><span>${task.proposals_count} ${plural(task.proposals_count, ['отклик', 'отклика', 'откликов'])}</span><div class="task-actions"><button class="primary-button" type="button" data-action="apply" data-task-id="${escape(task.id)}">Откликнуться</button><button class="secondary-button" type="button" data-action="proposals" data-task-id="${escape(task.id)}">Смотреть отклики</button></div></div></article>`;
+    }).join('') : '<p class="placeholder-text">По выбранным фильтрам задач пока нет.</p>';
+  }
+  for (const selector of ['#catalog-topic', '#catalog-level']) $(selector).addEventListener('change', () => run(null, () => renderCatalog()));
+  onClick('#catalog-more', () => renderCatalog(true));
+  $('#catalog-list').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-task-id]');
+    if (!button) return;
+    run(button, async () => {
+      if (button.dataset.action === 'proposals') {
+        await showTab('business-proposals'); $('#proposal-task').value = button.dataset.taskId; await renderProposals(); return;
+      }
+      await showTab('team');
+      if (!availableTeams.length) { await openTeam(); notify('Сначала создайте команду.'); return; }
+      const task = teamTasks.find((item) => item.id === button.dataset.taskId);
+      if (task) showTaskDetails(task, true);
+      else notify('Задача больше не опубликована. Обновите каталог.', true);
+    });
+  });
+  async function loadProposals() {
+    const tasks = [];
+    let page;
+    do { page = await api.getTasks({ include_drafts: true, offset: tasks.length, limit: 100 }); tasks.push(...page); } while (page.length === 100);
+    const previous = $('#proposal-task').value;
+    $('#proposal-task').innerHTML = tasks.map((task) => `<option value="${escape(task.id)}">${escape(task.title || 'Без названия')}${task.confirmed ? '' : ' (не опубликована)'}</option>`).join('');
+    if (tasks.some((task) => task.id === previous)) $('#proposal-task').value = previous;
+    $('#edit-task-button').disabled = !tasks.length;
+    await renderProposals();
+  }
+  onClick('#edit-task-button', async () => {
+    const taskId = $('#proposal-task').value;
+    if (!taskId) return;
+    const task = await api.getTask(taskId);
+    card = task.card; publishedId = task.id; $('#confirm-check').checked = false;
+    unlockedStep = 4; completedSteps.clear();
+    $('#draft-text').value = card.context; $('#task-topic').value = card.topic;
+    renderFields(); updatePublish(); await refreshScore(); await showTab('business-task'); setStep(3);
+  });
+  async function allTeams() {
+    const result = [];
+    let page;
+    do { page = await api.getTeams({ offset: result.length, limit: 100 }); result.push(...page); } while (page.length === 100);
+    return result;
+  }
+  async function renderProposals() {
+    const version = ++proposalRevision;
+    const taskId = $('#proposal-task').value;
+    if (!taskId) { $('#proposal-list').innerHTML = '<p class="placeholder-text">Сначала опубликуйте задачу.</p>'; return; }
+    const [proposals, teams] = await Promise.all([api.getProposals(taskId), allTeams()]);
+    if (version !== proposalRevision) return;
+    $('#proposal-list').innerHTML = proposals.length ? proposals.map((proposal) => {
+      const team = teams.find((team) => team.id === proposal.team_id);
+      const pending = proposal.status === 'pending';
+      const progress = proposal.status === 'accepted' ? `<div class="action-row progress-actions">${Object.entries(stages).map(([stage, [label, points]]) => proposal.stages_done.includes(stage) ? `<span class="status-badge status-accepted">${label} ✓</span>` : `<button class="secondary-button" type="button" data-proposal-id="${escape(proposal.id)}" data-stage="${stage}">${label} +${points}</button>`).join('')}</div>` : '';
+      return `<article class="proposal-card"><div class="proposal-header"><div><h3>${escape(team?.name || proposal.team_id)}</h3><span class="muted">${team?.points || 0} баллов команды</span></div><span class="status-badge status-${proposal.status}">${statuses[proposal.status]}</span></div><p><strong>Идея:</strong> ${escape(proposal.idea)}</p><p><strong>План:</strong> ${escape(proposal.plan)}</p>${proposal.prototype_url ? `<p><a href="${escape(proposal.prototype_url)}" target="_blank" rel="noopener noreferrer">Прототип ↗</a></p>` : ''}<div class="proposal-footer"><span>Срок: ${escape(proposal.deadline)}</span>${pending ? `<div class="action-row"><button class="primary-button" data-proposal-id="${escape(proposal.id)}" data-decision="accepted" type="button">Принять</button><button class="secondary-button" data-proposal-id="${escape(proposal.id)}" data-decision="rejected" type="button">Отклонить</button></div>` : ''}</div>${progress}</article>`;
+    }).join('') : '<p class="placeholder-text">Откликов пока нет.</p>';
+  }
+  $('#proposal-task').addEventListener('change', () => run(null, renderProposals));
+  $('#proposal-list').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-proposal-id]');
+    if (!button) return;
+    run(button, async () => {
+      if (button.dataset.decision) await api.decideProposal(button.dataset.proposalId, { decision: button.dataset.decision });
+      else await api.updateProgress(button.dataset.proposalId, { stage: button.dataset.stage });
+      await renderProposals(); notify('Изменения сохранены.');
+    });
+  });
 
   function recommendTasks(team, tasks) {
-    const allowedLevels = new Set(['working', 'ready', 'priority']);
     const interests = (team?.interests || []).map((item) => item.toLowerCase());
-    const skills = (team?.skills || []).map((item) => item.toLowerCase());
-
-    return tasks
-      .filter((task) => allowedLevels.has(task.level) && task.score >= 40)
-      .map((task) => {
-        const haystack = `${task.title} ${task.topic} ${task.need}`.toLowerCase();
-        const matched = [...new Set([
-          ...interests.filter((interest) => task.topic.toLowerCase() === interest || haystack.includes(interest)),
-          ...skills.filter((skill) => haystack.includes(skill)),
-          ...(team?.tech || []).map((item) => item.toLowerCase()).filter((technology) => haystack.includes(technology))
-        ])];
-        const topicMatch = interests.includes(task.topic.toLowerCase());
-        const score = Math.min(100, (topicMatch ? 70 : 0) + Math.min(matched.length * 10, 30));
-        return { task, score, matched };
-      })
-      .sort((left, right) => right.score - left.score || right.task.score - left.task.score);
+    const skills = [...(team?.skills || []), ...(team?.tech || [])].map((item) => item.toLowerCase());
+    return tasks.filter((task) => task.score >= 40 && ['working', 'ready', 'priority'].includes(task.level)).map((task) => {
+      const haystack = `${task.title} ${task.topic} ${task.need}`.toLowerCase();
+      const matched = [...new Set([...interests.filter((item) => haystack.includes(item)), ...skills.filter((item) => haystack.includes(item))])];
+      const score = Math.min(100, (interests.includes(task.topic.toLowerCase()) ? 70 : 0) + Math.min(matched.length * 10, 30));
+      return { task, score, matched };
+    }).sort((left, right) => right.score - left.score || right.task.score - left.task.score);
   }
-
   window.recommendTasks = recommendTasks;
 
-  const levelLabels = {
-    draft: 'Черновик',
-    working: 'Рабочая',
-    ready: 'Готовая',
-    priority: 'Приоритетная'
-  };
+  async function allPages(fetchPage, params = {}) {
+    const items = [];
+    let page;
+    do { page = await fetchPage({ ...params, offset: items.length, limit: 100 }); items.push(...page); } while (page.length === 100);
+    return items;
+  }
 
-  const statusLabels = {
-    pending: 'На рассмотрении',
-    accepted: 'Выбрана',
-    rejected: 'Отклонён'
-  };
+  async function renderTeam() {
+    const version = ++teamRevision;
+    const [teams, tasks] = await Promise.all([allTeams(), allPages(api.getTasks)]);
+    if (version !== teamRevision) return;
+    const team = teams.find((item) => item.id === selectedTeamId) || teams[0];
+    const proposals = team ? await allPages(api.getTeamProposals, { team_id: team.id }) : [];
+    if (version !== teamRevision) return;
+    availableTeams = teams; teamTasks = tasks; teamProposals = proposals; selectedTeamId = team?.id || null;
+    const options = teams.map((item) => `<option value="${escape(item.id)}">${escape(item.name)}</option>`).join('');
+    $('#team-select').innerHTML = options; $('#response-team').innerHTML = options;
+    $('#team-select').value = selectedTeamId || ''; $('#response-team').value = selectedTeamId || '';
+    $('#team-heading-name').textContent = team?.name || 'Команда';
+    $('#team-summary').textContent = team ? `${team.points} ${plural(team.points, ['балл', 'балла', 'баллов'])} команды` : 'Создайте команду кнопкой «Команды» вверху страницы.';
+    $('#team-profile').innerHTML = team ? [['interests', 'Интересы'], ['skills', 'Навыки'], ['tech', 'Технологии']].map(([key, label]) => `<div class="team-stat"><span>${label}</span><div class="profile-chips">${team[key].map((item) => `<span>${escape(item)}</span>`).join('')}</div></div>`).join('') : '';
+    const recommendations = team ? recommendTasks(team, tasks) : [];
+    $('#recommendation-counter').textContent = `${recommendations.length} ${plural(recommendations.length, ['задача', 'задачи', 'задач'])}`;
+    $('#recommendation-list').innerHTML = recommendations.length ? recommendations.map(({ task, score, matched }) => `<article class="task-card recommendation-card"><div class="task-card-header"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${score}% совпадение</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p><p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${escape(item)}</span>`).join('')}</div></div><button class="primary-button" type="button" data-task-id="${escape(task.id)}">Подробнее / Откликнуться</button></article>`).join('') : '<p class="placeholder-text">Подходящих задач пока нет. Все опубликованные задачи доступны в каталоге.</p>';
+    $('#team-proposals-list').innerHTML = proposals.length ? proposals.map((proposal) => `<article class="team-proposal-row"><div><strong>${escape(tasks.find((task) => task.id === proposal.task_id)?.title || proposal.task_id)}</strong><span class="muted">${escape(proposal.deadline)}</span></div><span class="status-badge status-${proposal.status}">${statuses[proposal.status]}</span></article>`).join('') : '<p class="placeholder-text">Команда пока никуда не откликалась.</p>';
+    if (selectedTask && team) {
+      const task = tasks.find((item) => item.id === selectedTask.id);
+      if (task) showTaskDetails(task);
+      else { selectedTask = null; $('#team-detail-panel').hidden = true; }
+    } else $('#team-detail-panel').hidden = true;
+  }
 
-  const proposalStageLabels = {
-    prototype: 'Прототип +10',
-    testing: 'Проверено с бизнесом +20',
-    final: 'Результат принят +30'
-  };
-
-  const getSelectedTeamProposal = (taskId, teamId) => (teamId ? window.mockApi?.getProposals?.({ team_id: teamId }) || [] : [])
-    .find((proposal) => proposal.task_id === taskId);
-
-  const readinessLabels = {
-    priority: 'Полностью готова к работе',
-    ready: 'Можно начинать без уточнений',
-    working: 'Возможны уточнения',
-    draft: 'Потребуются уточнения у бизнеса'
-  };
-
-  const populateResponseTeams = () => {
-    const teams = window.mockApi?.getTeams?.() || [];
-    responseTeam.innerHTML = teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join('');
-    if (selectedTeam) responseTeam.value = selectedTeam.id;
-  };
-
-  const renderCatalog = () => {
-    const tasks = window.mockApi?.listTasks?.({ topic: catalogTopic.value, level: catalogLevel.value }) || [];
-    catalogCounter.textContent = `${tasks.length} ${plural(tasks.length, ['задача', 'задачи', 'задач'])}`;
-    catalogList.innerHTML = tasks.length ? tasks.map((task) => `
-      <article class="task-card level-card level-${task.level}">
-        <div class="task-card-header">
-          <div class="task-level-meta"><span class="level-badge level-${task.level}">${levelLabels[task.level] || task.level}</span>${task.level === 'draft' ? '<span class="task-refinement">Требует уточнения</span>' : ''}</div>
-          <strong>${task.score}/100</strong>
-        </div>
-        <h3>${task.title}</h3>
-        <p class="task-topic">${task.topic}</p>
-        <p>${task.need || 'Потребность пока не описана.'}</p>
-        <p class="task-readiness">${readinessLabels[task.level] || 'Потребуются уточнения у бизнеса'}</p>
-        <div class="task-card-footer">
-          <span>${task.proposals_count} ${plural(task.proposals_count, ['отклик', 'отклика', 'откликов'])}</span>
-          <div class="task-actions">
-            <button class="primary-button apply-from-catalog" type="button" data-task-id="${task.id}">${getSelectedTeamProposal(task.id, selectedTeam?.id) ? 'Вы уже откликнулись' : 'Откликнуться'}</button>
-            <button class="secondary-button view-proposals" type="button" data-task-id="${task.id}">Смотреть отклики</button>
-          </div>
-        </div>
-      </article>
-    `).join('') : '<p class="placeholder-text">По выбранным фильтрам задач пока нет.</p>';
-
-    catalogList.querySelectorAll('.view-proposals').forEach((button) => {
-      button.addEventListener('click', () => {
-        proposalTask.value = button.dataset.taskId;
-        renderProposals();
-        document.querySelector('[data-tab="business-proposals"]').click();
-      });
-    });
-    catalogList.querySelectorAll('.apply-from-catalog').forEach((button) => {
-      const alreadyApplied = Boolean(getSelectedTeamProposal(button.dataset.taskId, selectedTeam?.id));
-      button.disabled = alreadyApplied;
-      button.addEventListener('click', () => openResponseForTask(button.dataset.taskId));
-    });
-  };
-
-  const renderProposals = () => {
-    const task = proposalTask.value ? window.mockApi?.getTask?.(proposalTask.value) : null;
-    const teams = window.mockApi?.getTeams?.() || [];
-    const proposals = task?.proposals || [];
-    proposalList.innerHTML = proposals.length ? proposals.map((proposal) => {
-      const team = teams.find((item) => item.id === proposal.team_id);
-      const isPending = proposal.status === 'pending';
-      const stages = ['prototype', 'testing', 'final'];
-      const completedStages = new Set(proposal.stages_done || []);
-      return `
-        <article class="proposal-card">
-          <div class="proposal-header">
-            <div><h3>${team?.name || proposal.team_id}</h3><span class="muted">${team?.points || 0} ${plural(team?.points || 0, ['балл', 'балла', 'баллов'])} команды</span></div>
-            <span class="status-badge status-${proposal.status}">${statusLabels[proposal.status] || proposal.status}</span>
-          </div>
-          <p><strong>Идея:</strong> ${proposal.idea}</p>
-          <p><strong>План:</strong> ${proposal.plan}</p>
-          <p class="prototype-line"><strong>Прототип:</strong> ${proposal.prototype_url ? `<a href="${proposal.prototype_url}" target="_blank" rel="noopener">${proposal.prototype_url}</a>` : 'не указан'}</p>
-          <div class="proposal-footer">
-            <span>Срок: ${proposal.deadline}</span>
-            ${isPending ? `<div class="action-row"><button class="primary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="accepted" type="button">Выбрать</button><button class="secondary-button proposal-decision" data-proposal-id="${proposal.id}" data-decision="rejected" type="button">Отклонить</button></div>` : ''}
-            ${proposal.status === 'accepted' ? `<div class="stage-actions">${stages.map((stage) => `<button class="secondary-button proposal-stage" data-proposal-id="${proposal.id}" data-stage="${stage}" type="button" ${completedStages.has(stage) ? 'disabled' : ''}>${completedStages.has(stage) ? '✓ ' : ''}${proposalStageLabels[stage]}</button>`).join('')}</div>` : ''}
-          </div>
-        </article>
-      `;
-    }).join('') : '<p class="placeholder-text">У этой задачи пока нет откликов.</p>';
-
-    proposalList.querySelectorAll('.proposal-decision').forEach((button) => {
-      button.addEventListener('click', () => {
-        window.mockApi.decideProposal(button.dataset.proposalId, { decision: button.dataset.decision });
-        renderProposals();
-        renderCatalog();
-      });
-    });
-
-    proposalList.querySelectorAll('.proposal-stage').forEach((button) => {
-      button.addEventListener('click', () => {
-        window.mockApi.updateProgress(button.dataset.proposalId, { stage: button.dataset.stage });
-        renderProposals();
-      });
-    });
-  };
-
-  const renderTeamProfile = () => {
-    if (!selectedTeam) return;
-    teamName.textContent = selectedTeam.name;
-    teamSummary.textContent = `${selectedTeam.points} ${plural(selectedTeam.points, ['балл', 'балла', 'баллов'])} команды`;
-    teamProfile.innerHTML = `
-      <div class="team-stat"><span>Интересы</span><div class="profile-chips">${selectedTeam.interests.map((item) => `<span>${item}</span>`).join('')}</div></div>
-      <div class="team-stat"><span>Навыки</span><div class="profile-chips">${selectedTeam.skills.map((item) => `<span>${item}</span>`).join('')}</div></div>
-      <div class="team-stat"><span>Технологии</span><div class="profile-chips">${selectedTeam.tech.map((item) => `<span>${item}</span>`).join('')}</div></div>
-    `;
-  };
-
-  const renderTeamProposals = () => {
-    if (!selectedTeam) return;
-    const tasks = window.mockApi?.listTasks?.() || [];
-    const taskMap = new Map(tasks.map((task) => [task.id, task]));
-    const proposals = window.api?.getProposals
-      ? window.api.getProposals({ team_id: selectedTeam.id })
-      : window.mockApi?.getProposals?.({ team_id: selectedTeam.id }) || [];
-    const render = (items) => {
-      teamProposalsList.innerHTML = items.length ? items.map((proposal) => {
-        const task = taskMap.get(proposal.task_id);
-        return `<article class="team-proposal-row"><div><strong>${task?.title || proposal.task_id}</strong><span class="muted">${proposal.deadline || 'Срок не указан'}</span></div><span class="status-badge status-${proposal.status}">${statusLabels[proposal.status] || proposal.status}</span></article>`;
-      }).join('') : '<p class="placeholder-text">Команда пока никуда не откликалась.</p>';
-    };
-    if (proposals?.then) proposals.then(render);
-    else render(proposals);
-  };
-
-  const showRecommendationDetails = (recommendation) => {
-    selectedRecommendation = recommendation;
-    const { task, score, matched } = recommendation;
-    populateResponseTeams();
-    const existingProposal = selectedTeam ? getSelectedTeamProposal(task.id, selectedTeam.id) : null;
-    detailTitle.textContent = task.title;
-    detailContent.innerHTML = `
-      <div class="detail-meta"><span class="level-badge level-${task.level}">${levelLabels[task.level]}</span><strong>${task.score}/100</strong></div>
-      <p class="task-topic">${task.topic}</p>
-      <p>${task.need || 'Потребность пока не описана.'}</p>
-      <div class="match-box"><span>Совпадение с профилем: ${score}%</span><strong>${matched.length ? matched.join(' · ') : 'Общее направление'}</strong></div>
-    `;
-    responseForm.hidden = Boolean(existingProposal);
-    responseMessage.textContent = existingProposal ? `Команда уже отправила отклик: ${statusLabels[existingProposal.status] || existingProposal.status}.` : '';
-    teamDetailPanel.hidden = false;
-  };
-
-  const openResponseForTask = (taskId) => {
-    const task = (window.mockApi?.listTasks?.() || []).find((item) => item.id === taskId);
-    if (!task) return;
-    const teams = window.mockApi?.getTeams?.() || [];
-    if (!selectedTeam) selectedTeam = teams[0] || null;
-    if (selectedTeam) teamSelect.value = selectedTeam.id;
-    showRecommendationDetails({ task, score: 0, matched: [] });
-    document.querySelector('[data-tab="team"]').click();
-    teamDetailPanel.hidden = false;
-  };
-
-  const validateResponse = () => {
-    const errors = {};
-    const idea = responseIdea.value.trim();
-    const plan = responsePlan.value.trim();
-    const deadline = responseDeadline.value;
-    const prototype = responsePrototype.value.trim();
-    const today = new Date().toISOString().slice(0, 10);
-
-    if (idea.length < 20) errors.idea = 'Идея должна содержать минимум 20 символов.';
-    if (plan.length < 20) errors.plan = 'План должен содержать минимум 20 символов.';
-    if (!deadline || deadline < today) errors.deadline = 'Срок не может быть в прошлом.';
-    try {
-      const url = new URL(prototype);
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol');
-    } catch {
-      errors.prototype = 'Укажите ссылку, начинающуюся с http:// или https://.';
+  function showTaskDetails(task, reset = false) {
+    if (reset || selectedTask?.id !== task.id) {
+      $('#response-form').reset();
+      ['idea', 'plan', 'deadline', 'prototype'].forEach((key) => { $(`#response-${key}-error`).textContent = ''; });
     }
-    return errors;
-  };
-
-  const renderResponseErrors = (errors) => {
-    document.querySelector('#response-idea-error').textContent = errors.idea || '';
-    document.querySelector('#response-plan-error').textContent = errors.plan || '';
-    document.querySelector('#response-deadline-error').textContent = errors.deadline || '';
-    document.querySelector('#response-prototype-error').textContent = errors.prototype || '';
-  };
-
-  const renderTeam = () => {
-    const teams = window.mockApi?.getTeams?.() || [];
-    if (!teams.length) return;
-    if (!teamSelect.options.length) {
-      teamSelect.innerHTML = teams.map((team) => `<option value="${team.id}">${team.name}</option>`).join('');
-    }
-    selectedTeam = teams.find((team) => team.id === teamSelect.value) || teams[0];
-    teamSelect.value = selectedTeam.id;
-    populateResponseTeams();
-    renderTeamProfile();
-    const recommendations = recommendTasks(selectedTeam, window.mockApi?.listTasks?.() || []);
-    recommendationCounter.textContent = `${recommendations.length} ${plural(recommendations.length, ['задача', 'задачи', 'задач'])}`;
-    recommendationList.innerHTML = recommendations.length ? recommendations.map(({ task, score, matched }) => `
-      <article class="task-card recommendation-card">
-        <div class="task-card-header"><span class="level-badge level-${task.level}">${levelLabels[task.level]}</span><strong>${score}% совпадение</strong></div>
-        <h3>${task.title}</h3>
-        <p class="task-topic">${task.topic}</p>
-        <p>${task.need || 'Потребность пока не описана.'}</p>
-        <div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${item}</span>`).join('')}</div></div>
-        <button class="primary-button recommendation-details" type="button" data-task-id="${task.id}">Подробнее / Откликнуться</button>
-      </article>
-    `).join('') : '<p class="placeholder-text">Подходящих задач пока нет.</p>';
-    recommendationList.querySelectorAll('.recommendation-details').forEach((button) => {
-      button.addEventListener('click', () => showRecommendationDetails(recommendations.find((item) => item.task.id === button.dataset.taskId)));
-    });
-    renderTeamProposals();
-  };
-
-  const setStep = (step) => {
-    currentStep = step;
-    wizardSteps.forEach((button) => {
-      const stepNumber = Number(button.dataset.step);
-      const active = stepNumber === step;
-      const complete = completedSteps.has(stepNumber) && !active;
-      button.disabled = stepNumber > unlockedStep;
-      button.classList.toggle('is-active', active);
-      button.classList.toggle('is-complete', complete);
-      button.textContent = `${complete ? '✓ ' : ''}${button.dataset.label}`;
-    });
-
-    wizardPanels.forEach((panel) => {
-      const visible = Number(panel.dataset.panel) === step;
-      panel.hidden = !visible;
-    });
-  };
-
-  const sampleDrafts = [
-    {
-      topic: 'образование',
-      text: 'Нужно вести учёт посещаемости кружков. Сейчас всё в бумажном журнале и листках. Хочется, чтобы родители видели, кто приходил, а руководитель видел статистику по группам.'
-    }
-  ];
-
-  const updatePublishButton = () => {
-    const canPublish = confirmCheck.checked && cardState.title && cardState.topic;
-    publishButton.disabled = !canPublish;
-  };
-
-  const renderCardForm = () => {
-    const fields = [
-      { key: 'title', label: 'Название задачи', full: true },
-      { key: 'topic', label: 'Тема', full: true },
-      { key: 'context', label: 'Контекст и проблема', full: true },
-      { key: 'need', label: 'Потребность', full: true },
-      { key: 'users', label: 'Пользователи и участники', full: true },
-      { key: 'data', label: 'Данные и материалы', full: true },
-      { key: 'constraints', label: 'Ограничения', full: true },
-      { key: 'expected_result', label: 'Ожидаемый результат', full: true },
-      { key: 'success_criteria', label: 'Критерии успеха', full: true },
-      { key: 'contact', label: 'Контакт', full: false },
-      { key: 'interaction_format', label: 'Формат взаимодействия', full: false }
-    ];
-
-    cardForm.innerHTML = fields.map((field) => {
-      const value = cardState[field.key] || '';
-      const wrapperClass = field.full ? 'field-block full' : 'field-block';
-      const fieldHint = window.fieldHints[field.key] || {};
-      const maxScore = fieldHint.max ?? 0;
-      const earned = field.key === 'title' || field.key === 'topic' ? 0 : (window.mockApi?.scoreCard ? window.mockApi.scoreCard({ card: cardState }).breakdown.find((item) => item.field === field.key)?.earned || 0 : 0);
-      const scoreLabel = field.key === 'title' || field.key === 'topic' ? 'обязательно' : `${earned}/${maxScore}`;
-      const check = earned >= maxScore && maxScore > 0 ? ' ✓' : '';
-
-      return `
-        <div class="${wrapperClass}">
-          <label for="field-${field.key}">${fieldHint.label || field.label} · ${scoreLabel}${check}</label>
-          <textarea id="field-${field.key}" data-field="${field.key}">${value}</textarea>
-        </div>
-      `;
-    }).join('');
-
-    cardForm.querySelectorAll('textarea[data-field]').forEach((textarea) => {
-      textarea.addEventListener('input', (event) => {
-        const field = event.target.dataset.field;
-        cardState[field] = event.target.value;
-        refreshScore();
-        updatePublishButton();
-      });
-    });
-  };
-
-  const levelMeta = {
-    draft: { label: 'Черновик', className: 'level-draft', color: '#9CA3AF' },
-    working: { label: 'Рабочая', className: 'level-working', color: '#3B82F6' },
-    ready: { label: 'Готовая', className: 'level-ready', color: '#10B981' },
-    priority: { label: 'Приоритетная', className: 'level-priority', color: '#F59E0B' }
-  };
-
-  const animateScore = (target) => {
-    const current = Number(scoreValue.dataset.value || 0);
-    const start = Number.isFinite(current) ? current : 0;
-    const step = Math.max(1, Math.round(Math.abs(target - start) / 20));
-
-    let index = start;
-    const timer = setInterval(() => {
-      if (index >= target) {
-        scoreValue.textContent = String(target);
-        scoreValue.dataset.value = String(target);
-        clearInterval(timer);
-        return;
-      }
-      index += step;
-      if (index > target) index = target;
-      scoreValue.textContent = String(index);
-      scoreValue.dataset.value = String(index);
-    }, 16);
-  };
-
-  const refreshScore = async () => {
-    const payload = { card: { ...cardState } };
-    const result = window.mockApi?.scoreCard ? window.mockApi.scoreCard(payload) : { score: 0, level: 'draft', breakdown: [], missing: [] };
-
-    const level = levelMeta[result.level] || levelMeta.draft;
-    const targetValue = result.score ?? 0;
-    scoreLevel.textContent = level.label;
-    scoreLevel.className = `level-badge ${level.className}`;
-    scoreProgress.style.width = `${Math.min(targetValue, 100)}%`;
-    scoreProgress.style.background = level.color;
-
-    breakdownList.innerHTML = (result.breakdown || []).map((item) => {
-      const fieldHint = window.fieldHints[item.field] || {};
-      const label = fieldHint.label || item.label || item.field;
-      const check = item.max > 0 && item.earned >= item.max ? ' ✓' : '';
-      const progress = item.max ? Math.round((item.earned / item.max) * 100) : 0;
-      return `<li class="breakdown-item"><div class="breakdown-line"><strong>${label} · ${item.earned}/${item.max}${check}</strong><span>${item.reason || ''}</span></div><span class="field-progress"><span style="width: ${progress}%"></span></span></li>`;
-    }).join('') || '<li>Пустой рейтинг</li>';
-
-    const tips = (result.missing || []).slice(0, 4).map((item) => {
-      const fieldHint = window.fieldHints[item.field] || {};
-      return `<li><strong>+${item.potential_points} ${plural(item.potential_points, ['балл', 'балла', 'баллов'])} · ${fieldHint.label || item.field}</strong><span>${item.hint}</span></li>`;
-    });
-    tipsList.innerHTML = tips.length ? tips.join('') : '<li>Задача полностью готова 🎉</li>';
-
-    animateScore(targetValue);
-  };
-
-  const renderQuestions = () => {
-    if (!questions.length) {
-      questionList.innerHTML = '<p class="placeholder-text">Сначала нажмите «Проанализировать» и система предложит уточняющие вопросы.</p>';
-      questionsCounter.textContent = '0 вопросов';
-      return;
-    }
-
-    questionList.innerHTML = questions.map((question) => `
-      <div class="question-item">
-        <small>${question.field}</small>
-        <label for="answer-${question.id}">${question.question}</label>
-        <textarea id="answer-${question.id}" data-question-id="${question.id}" data-field="${question.field}" placeholder="Напишите ответ..."></textarea>
-      </div>
-    `).join('');
-
-    questionsCounter.textContent = `${questions.length} вопросов`;
-
-    questionList.querySelectorAll('textarea[data-question-id]').forEach((textarea) => {
-      textarea.addEventListener('input', (event) => {
-        const field = event.target.dataset.field;
-        const answer = event.target.value;
-        const questionId = event.target.dataset.questionId;
-
-        const existing = cardState[field] || '';
-        if (existing !== answer) {
-          cardState[field] = answer;
-          renderCardForm();
-          refreshScore();
-        }
-
-        const question = questions.find((item) => item.id === questionId);
-        if (question) {
-          question.answer = answer;
-        }
-      });
-    });
-  };
-
-  const collectBuiltCard = async () => {
-    const payload = {
-      draft_text: draftText.value,
-      topic: taskTopic.value,
-      answers: questions.map((question) => ({
-        question_id: question.id,
-        field: question.field,
-        answer: document.querySelector(`#answer-${question.id}`)?.value || ''
-      }))
-    };
-
-    const result = window.mockApi?.buildCard ? window.mockApi.buildCard(payload) : { card: { ...cardState }, warnings: [] };
-    Object.assign(cardState, result.card || {});
-    renderCardForm();
-    await refreshScore();
-    completedSteps.add(2);
-    unlockedStep = Math.max(unlockedStep, 4);
-    setStep(3);
-  };
-
-  analyzeButton.addEventListener('click', async () => {
-    const payload = {
-      draft_text: draftText.value,
-      topic: taskTopic.value
-    };
-
-    const result = window.mockApi?.analyze ? window.mockApi.analyze(payload) : { questions: [], filled_fields: [], missing_fields: [], mode: 'demo' };
-    questions = result.questions || [];
-    renderQuestions();
-    completedSteps.add(1);
-    unlockedStep = Math.max(unlockedStep, 2);
-    setStep(2);
+    selectedTask = task;
+    const team = availableTeams.find((item) => item.id === selectedTeamId);
+    const match = recommendTasks(team, [task])[0] || { score: 0, matched: [] };
+    const existing = teamProposals.find((proposal) => proposal.task_id === task.id);
+    $('#response-team').value = selectedTeamId || '';
+    $('#detail-title').textContent = task.title;
+    $('#detail-content').innerHTML = `<div class="detail-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${task.score}/100</strong></div><p class="task-topic">${escape(task.topic)}</p><p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-box"><span>Совпадение с профилем: ${match.score}%</span><strong>${escape(match.matched.join(' · ') || 'Совпадения не найдены — отклик всё равно доступен')}</strong></div>`;
+    $('#response-form').hidden = Boolean(existing) || !team;
+    $('#response-message').textContent = existing ? `Команда уже отправила отклик: ${statuses[existing.status]}.` : '';
+    $('#team-detail-panel').hidden = false;
+  }
+  $('#team-select').addEventListener('change', () => {
+    selectedTeamId = $('#team-select').value;
+    run(null, renderTeam);
   });
-
-  sampleButton.addEventListener('click', () => {
-    const sample = sampleDrafts[0];
-    draftText.value = sample.text;
-    taskTopic.value = sample.topic;
-    questions = [];
-    renderQuestions();
+  $('#response-team').addEventListener('change', () => {
+    selectedTeamId = $('#response-team').value;
+    run(null, renderTeam);
   });
-
-  buildCardButton.addEventListener('click', async () => {
-    await collectBuiltCard();
+  $('#recommendation-list').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-task-id]');
+    if (!button) return;
+    const task = teamTasks.find((item) => item.id === button.dataset.taskId);
+    if (task) showTaskDetails(task, true);
   });
-
-  confirmCheck.addEventListener('change', updatePublishButton);
-  catalogTopic.addEventListener('change', renderCatalog);
-  catalogLevel.addEventListener('change', renderCatalog);
-  proposalTask.addEventListener('change', renderProposals);
-  responseTeam.addEventListener('change', () => {
-    selectedTeam = (window.mockApi?.getTeams?.() || []).find((team) => team.id === responseTeam.value) || selectedTeam;
-    if (selectedRecommendation) {
-      const existingProposal = getSelectedTeamProposal(selectedRecommendation.task.id, selectedTeam?.id);
-      responseForm.hidden = Boolean(existingProposal);
-      responseMessage.textContent = existingProposal ? `Команда уже отправила отклик: ${statusLabels[existingProposal.status] || existingProposal.status}.` : '';
-    }
-  });
-  teamSelect.addEventListener('change', renderTeam);
-  closeDetailButton.addEventListener('click', () => {
-    teamDetailPanel.hidden = true;
-    selectedRecommendation = null;
-  });
-
-  responseForm.addEventListener('submit', (event) => {
+  onClick('#close-detail-button', () => { selectedTask = null; $('#team-detail-panel').hidden = true; });
+  $('#response-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!selectedTeam || !selectedRecommendation) return;
-    const errors = validateResponse();
-    renderResponseErrors(errors);
+    if (!selectedTask || !selectedTeamId) return;
+    const payload = { team_id: selectedTeamId, idea: $('#response-idea').value.trim(), plan: $('#response-plan').value.trim(), deadline: $('#response-deadline').value, prototype_url: $('#response-prototype').value.trim() };
+    const errors = {}, now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (payload.idea.length < 20) errors.idea = 'Идея должна содержать минимум 20 символов.';
+    if (payload.plan.length < 20) errors.plan = 'План должен содержать минимум 20 символов.';
+    if (!payload.deadline || payload.deadline < today) errors.deadline = 'Срок не может быть в прошлом.';
+    try { if (!['http:', 'https:'].includes(new URL(payload.prototype_url).protocol)) throw new Error(); }
+    catch { errors.prototype = 'Укажите ссылку, начинающуюся с http:// или https://.'; }
+    for (const key of ['idea', 'plan', 'deadline', 'prototype']) $(`#response-${key}-error`).textContent = errors[key] || '';
     if (Object.keys(errors).length) return;
-    responseSubmitButton.disabled = true;
-    responseSubmitButton.textContent = 'Отправка...';
-    Promise.resolve().then(() => window.mockApi.createProposal(selectedRecommendation.task.id, {
-      team_id: responseTeam.value,
-      idea: responseIdea.value.trim(),
-      plan: responsePlan.value.trim(),
-      deadline: responseDeadline.value,
-      prototype_url: responsePrototype.value.trim()
-    })).then((proposal) => {
-      selectedTeam = (window.mockApi.getTeams?.() || []).find((team) => team.id === responseTeam.value) || selectedTeam;
-      responseMessage.textContent = `Отклик отправлен: ${proposal.id}.`;
-      responseForm.hidden = true;
-      renderTeamProposals();
-      renderCatalog();
-    }).finally(() => {
-      responseSubmitButton.disabled = false;
-      responseSubmitButton.textContent = 'Отправить отклик';
-    });
+    const taskId = selectedTask.id, button = $('#response-submit-button');
+    run(button, async () => {
+      button.textContent = 'Отправка…';
+      try {
+        await api.createProposal(taskId, payload);
+        await renderTeam();
+        notify('Отклик отправлен. Решение принимает бизнес.');
+      } finally { button.textContent = 'Отправить отклик'; }
+    }, $('#response-message'));
   });
 
-  publishButton.addEventListener('click', async () => {
-    if (!cardState.title || !cardState.topic) {
-      publishMessage.textContent = 'Заполните название и тему задачи перед публикацией.';
-      return;
-    }
-
-    const result = window.mockApi?.createTask ? window.mockApi.createTask({ card: cardState, confirmed: true }) : { id: 't1', card: cardState, score: 0, level: 'draft' };
-    publishMessage.textContent = `Задача опубликована: ${result.id}. Место в каталоге будет обновлено после проверки.`;
-  });
-
-  wizardSteps.forEach((button) => {
-    button.dataset.label = button.textContent;
-    button.addEventListener('click', () => {
-      if (!button.disabled) setStep(Number(button.dataset.step));
-    });
-  });
-
-  renderCardForm();
-  refreshScore();
-  updatePublishButton();
-  setStep(1);
-  fieldHintsReady.then(() => {
-    renderCardForm();
-    refreshScore();
+  renderFields(); updatePublish(); setStep(1);
+  run(null, async () => {
+    const health = await api.getHealth();
+    $('#mode-label').textContent = health.mode === 'demo' ? 'Деморежим · без ИИ'
+      : health.ai_configured ? 'Помощник: OpenAI' : 'OpenAI · требуется настройка';
+    await refreshScore();
   });
 });

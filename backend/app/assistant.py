@@ -1,5 +1,6 @@
-"""Deterministic demo assistant. Does not call an AI provider or invent facts."""
+"""Task assistants: OpenAI agents when configured, explicit local demo otherwise."""
 
+from app.config import Settings
 from app.schemas import AnalyzeRead, AnalyzeRequest, BuildRead, BuildRequest, Card
 
 QUESTIONS = [
@@ -11,7 +12,11 @@ QUESTIONS = [
 ]
 
 
-def analyze(data: AnalyzeRequest) -> AnalyzeRead:
+async def analyze(data: AnalyzeRequest, settings: Settings) -> AnalyzeRead:
+    if settings.assistant_mode == "openai":
+        from app.ai_agents import analyze_draft
+
+        return await analyze_draft(data, settings)
     return AnalyzeRead(
         questions=[
             {"id": f"q{i}", "field": field, "question": question}
@@ -22,8 +27,12 @@ def analyze(data: AnalyzeRequest) -> AnalyzeRead:
     )
 
 
-def build_card(data: BuildRequest) -> BuildRead:
-    values = {answer.field: answer.answer for answer in data.answers}
+async def build_card(data: BuildRequest, settings: Settings) -> BuildRead:
+    if settings.assistant_mode == "openai":
+        from app.ai_agents import build_task_card
+
+        return await build_task_card(data, settings)
+    values = {answer.field: answer.answer for answer in data.answers if answer.answer}
     values.setdefault("topic", data.topic)
     values.setdefault("context", data.draft_text[:5000])
     values.setdefault("title", data.topic.capitalize())
