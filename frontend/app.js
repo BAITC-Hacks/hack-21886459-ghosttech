@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let participants = [], catalogSearchTimer, detailRevision = 0;
   let unlockedStep = 1, currentStep = 1, assistantBusy = false, initialScore = null;
   const completedSteps = new Set();
-  const profileTabs = { business: ['business-task', 'business-proposals'], student: ['catalog', 'team'] };
+  const profileTabs = { business: ['business-task', 'business-proposals', 'leaders'], student: ['catalog', 'team', 'leaders'] };
   const lastProfileTab = { business: 'business-task', student: 'catalog' };
   let activeProfile = 'business';
   const readiness = {
@@ -121,23 +121,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function fillTeamForm() {
     myTeam = availableTeams.find((team) => team.id === $('#team-choice').value) || null;
+    $('#team-contact').value = myTeam?.contact || '';
     for (const key of ['name', 'interests', 'skills', 'tech']) {
       $(key === 'name' ? '#team-dialog-name' : `#team-${key}`).value = key === 'name' ? myTeam?.name || '' : (myTeam?.[key] || []).join(', ');
     }
   }
-  async function openTeam() {
+  async function openTeam(editSelected = false) {
     if (activeProfile !== 'student') return;
     availableTeams = await allTeams();
     if (activeProfile !== 'student') return;
     $('#team-choice').innerHTML = '<option value="">Новая команда</option>' + availableTeams.map((team) => `<option value="${escape(team.id)}">${escape(team.name)}</option>`).join('');
+    if (editSelected) $('#team-choice').value = selectedTeamId || '';
     fillTeamForm();
     $('#team-error').textContent = ''; $('#team-dialog').showModal();
   }
+  onClick('#edit-team-profile', () => openTeam(true));
   $('#team-choice').addEventListener('change', fillTeamForm);
   $('#team-form').addEventListener('submit', (event) => {
     event.preventDefault(); $('#team-error').textContent = '';
     run(event.currentTarget.querySelector('[type="submit"]'), async () => {
-      const payload = { name: $('#team-dialog-name').value };
+      const payload = { name: $('#team-dialog-name').value, contact: $('#team-contact').value.trim() };
       for (const key of ['interests', 'skills', 'tech']) payload[key] = $(`#team-${key}`).value.split(',').map((v) => v.trim()).filter(Boolean);
       myTeam = await (myTeam ? api.updateTeam(myTeam.id, payload) : api.createTeam(payload));
       selectedTeamId = myTeam.id;
@@ -158,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-tab]').forEach((button) => {
       button.hidden = !profileTabs[profile].includes(button.dataset.tab);
     });
-    for (const id of ['team-dialog', 'participants-dialog']) $(`#${id}`).close();
+    for (const id of ['team-dialog', 'participants-dialog', 'public-task-dialog', 'public-profile-dialog']) $(`#${id}`).close();
     notify('');
     await showTab(lastProfileTab[profile]);
   }
@@ -179,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (target === 'catalog') await renderCatalog();
     if (target === 'business-proposals') await loadProposals();
     if (target === 'team') await renderTeam();
+    if (target === 'leaders') await renderLeaderboard();
   }
   document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => run(null, () => showTab(button.dataset.tab))));
   function setStep(step) {
@@ -546,6 +550,131 @@ document.addEventListener('DOMContentLoaded', () => {
         notify('Отклик отправлен. Решение принимает бизнес.');
       } finally { button.textContent = 'Отправить отклик'; }
     }, $('#response-message'));
+  });
+
+  let leaderboardRevision = 0, publicProfileRevision = 0, publicTaskRevision = 0;
+  let publicProfileState = null, publicTaskId = null;
+  const pointsLabel = (points) => `${points} ${plural(points, ['балл', 'балла', 'баллов'])}`;
+  const chips = (items) => `<div class="profile-chips">${items.map((item) => `<span>${escape(item)}</span>`).join('')}</div>`;
+  const demoLabel = (isDemo) => isDemo ? '<span class="demo-badge">Демо</span>' : '';
+  function contactMarkup(value) {
+    let href = '';
+    if (/^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(value)) href = `mailto:${encodeURIComponent(value)}`;
+    else {
+      try { const url = new URL(value); if (['https:', 'http:'].includes(url.protocol)) href = url.href; } catch { /* Keep free-form contacts as text. */ }
+    }
+    return href ? `<a href="${escape(href)}" target="_blank" rel="noopener noreferrer">${escape(value)}</a>` : escape(value);
+  }
+  function rankCard(row, kind) {
+    const profile = kind === 'business' ? row.profile : row.team;
+    const title = kind === 'business' ? profile.organization || profile.name : profile.name;
+    const description = kind === 'business' ? profile.name : [...profile.skills, ...profile.tech].slice(0, 4).join(' · ') || 'Навыки пока не указаны';
+    const stats = kind === 'business'
+      ? `Задач за период: ${row.published_tasks} · Готовность: ${row.average_readiness}/100`
+      : `Подтверждено этапов: ${row.confirmed_stages} · Завершено задач: ${row.completed_tasks}`;
+    const availability = kind === 'business' ? `<span class="leader-availability">${row.open_tasks} ${plural(row.open_tasks, ['открытая задача', 'открытые задачи', 'открытых задач'])}</span>` : '';
+    return `<article class="leader-card"><div class="leader-card-header"><span class="rank-position ${row.rank <= 3 ? 'rank-podium' : ''}" aria-label="Место ${row.rank}">${row.rank}</span><div class="leader-identity"><h4>${escape(title)}</h4><p class="muted">${escape(description)}</p></div>${demoLabel(profile.is_demo)}</div><p class="leader-points">⭐ ${pointsLabel(row.points)}</p><p class="muted">${stats}</p>${availability}<button class="secondary-button" type="button" data-public-kind="${kind}" data-public-id="${escape(profile.id)}">${kind === 'business' ? 'Профиль и задачи' : 'Профиль и контакты'}</button></article>`;
+  }
+  async function renderLeaderboard() {
+    const version = ++leaderboardRevision, period = $('#leader-period').value;
+    $('#leader-lists').setAttribute('aria-busy', 'true');
+    $('#leader-status').textContent = 'Загружаем рейтинг…';
+    $('#business-leaders').replaceChildren(); $('#team-leaders').replaceChildren();
+    try {
+      const result = await api.getLeaderboard({ period, limit: 10 });
+      if (version !== leaderboardRevision) return;
+      const date = new Date(result.as_of).toLocaleDateString('ru-RU', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+      $('#leader-status').textContent = `${period === 'month' ? date : 'Рейтинг за всё время'} · ${result.businesses.length} профилей бизнеса и ${result.teams.length} команд`;
+      $('#business-leaders').innerHTML = result.businesses.length ? result.businesses.map((row) => rankCard(row, 'business')).join('') : '<p class="placeholder-text">За этот период пока нет опубликованных задач или подтверждённых результатов бизнеса. Попробуйте «Всё время».</p>';
+      $('#team-leaders').innerHTML = result.teams.length ? result.teams.map((row) => rankCard(row, 'team')).join('') : '<p class="placeholder-text">За этот период команды ещё не получили баллы за подтверждённые этапы. Попробуйте «Всё время».</p>';
+    } catch (error) {
+      if (version === leaderboardRevision) $('#leader-status').textContent = `${error.message} Нажмите «Обновить рейтинг», чтобы повторить.`;
+    } finally {
+      if (version === leaderboardRevision) $('#leader-lists').setAttribute('aria-busy', 'false');
+    }
+  }
+  $('#leader-period').addEventListener('change', () => renderLeaderboard());
+  onClick('#leader-refresh', renderLeaderboard);
+  function publicTaskCard(task, extra = '') {
+    return `<article class="public-project"><div class="detail-meta"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><span class="muted">${task.open_for_proposals ? 'Открыта для откликов' : 'Команда выбрана'}</span></div><h4>${escape(task.title)}</h4><p class="muted">${escape(task.need || 'Потребность пока не описана.')}</p>${extra}<button class="secondary-button" type="button" data-public-task="${escape(task.id)}">Посмотреть задачу</button></article>`;
+  }
+  async function openPublicProfile(kind, id, append = false) {
+    const version = ++publicProfileRevision, dialog = $('#public-profile-dialog');
+    const offset = append ? publicProfileState?.loaded || 0 : 0;
+    if (!append) {
+      publicProfileState = { kind, id, loaded: 0 };
+      $('#public-profile-title').textContent = kind === 'business' ? 'Профиль бизнеса' : 'Профиль команды';
+      $('#public-profile-content').textContent = 'Загружаем профиль…';
+      $('#public-profile-more').hidden = true;
+      if (!dialog.open) dialog.showModal();
+    }
+    $('#public-profile-error').textContent = '';
+    try {
+      const data = await (kind === 'business' ? api.getBusinessProfile(id, { offset, limit: 12 }) : api.getTeamProfile(id, { offset, limit: 12 }));
+      if (version !== publicProfileRevision || !dialog.open) return;
+      const profile = kind === 'business' ? data.profile : data.team;
+      const entries = kind === 'business' ? data.tasks : data.projects;
+      const total = kind === 'business' ? data.total_tasks : data.total_projects;
+      if (!append) {
+        $('#public-profile-title').textContent = kind === 'business' ? profile.organization || profile.name : profile.name;
+        const contacts = kind === 'business' ? data.contacts : profile.contact ? [profile.contact] : [];
+        const contactSection = contacts.length ? contacts.map((value) => `<p class="public-contact">${contactMarkup(value)}</p>`).join('') : '<p class="muted">Контакт пока не указан.</p>';
+        const intro = kind === 'business' ? `<p>${escape(profile.name)}</p><p class="muted">${escape(profile.bio)}</p>${chips(profile.interests)}<p>Открытых задач: ${data.open_tasks} · Опубликовано: ${total}</p>` : `<p class="leader-points">⭐ ${pointsLabel(profile.points)} за всё время</p>${chips([...new Set([...profile.interests, ...profile.skills, ...profile.tech])])}${profile.members.length ? `<h3>Участники</h3>${chips(profile.members.map((person) => person.name))}` : ''}`;
+        $('#public-profile-content').innerHTML = `${demoLabel(profile.is_demo)}${intro}<section class="public-contact-box"><h3>Связаться</h3>${contactSection}${profile.is_demo ? '<p class="muted">Демонстрационный профиль. Контакты из примеров не предназначены для реальной связи.</p>' : ''}</section><h3>${kind === 'business' ? 'Задачи бизнеса' : 'Проекты команды'}</h3><p class="muted" id="public-project-count"></p><div id="public-projects" class="public-projects"></div>`;
+      }
+      const html = entries.map((entry) => kind === 'business' ? publicTaskCard(entry) : publicTaskCard(entry.task, `<p class="muted">${entry.stages_done.length ? entry.stages_done.map((stage) => stages[stage][0]).join(' → ') : 'Работа с бизнесом началась'}</p>${entry.prototype_url ? `<p>Прототип: ${contactMarkup(entry.prototype_url)}</p>` : ''}`)).join('');
+      $('#public-projects').insertAdjacentHTML('beforeend', html);
+      publicProfileState.loaded += entries.length;
+      if (!publicProfileState.loaded) $('#public-projects').innerHTML = '<p class="placeholder-text">Публичных проектов пока нет.</p>';
+      $('#public-project-count').textContent = `Показано ${publicProfileState.loaded} из ${total}`;
+      $('#public-profile-more').hidden = publicProfileState.loaded >= total || !entries.length;
+    } catch (error) {
+      if (version === publicProfileRevision) {
+        $('#public-profile-error').textContent = error.message;
+        if (!append) $('#public-profile-content').textContent = 'Профиль не удалось загрузить. Закройте окно и попробуйте снова.';
+      }
+    }
+  }
+  $('#public-profile-dialog').addEventListener('close', () => { ++publicProfileRevision; publicProfileState = null; });
+  onClick('#public-profile-more', () => publicProfileState && openPublicProfile(publicProfileState.kind, publicProfileState.id, true));
+  async function openPublicTask(id) {
+    const version = ++publicTaskRevision, dialog = $('#public-task-dialog');
+    publicTaskId = null;
+    $('#public-task-title').textContent = 'Задача';
+    $('#public-task-content').textContent = 'Загружаем задачу…';
+    $('#public-task-apply').hidden = true;
+    if (!dialog.open) dialog.showModal();
+    try {
+      const data = await api.getTask(id);
+      if (version !== publicTaskRevision || !dialog.open) return;
+      if (!data.confirmed) throw new Error('Эта задача больше не опубликована.');
+      publicTaskId = data.id;
+      $('#public-task-title').textContent = data.card.title;
+      $('#public-task-content').innerHTML = `<p><span class="level-badge level-${data.level}">${levelMeta[data.level].label}</span> ${data.score}/100</p>${fields.filter(([key]) => key !== 'title').map(([key, label]) => `<section class="public-task-field"><h3>${escape(label)}</h3><p>${key === 'contact' && data.card[key] ? contactMarkup(data.card[key]) : escape(data.card[key] || 'Пока не указано')}</p></section>`).join('')}`;
+      $('#public-task-apply').hidden = activeProfile !== 'student';
+    } catch (error) {
+      if (version === publicTaskRevision) $('#public-task-content').textContent = error.message;
+    }
+  }
+  $('#public-task-dialog').addEventListener('close', () => { ++publicTaskRevision; publicTaskId = null; });
+  onClick('#public-task-apply', async () => {
+    const id = publicTaskId;
+    if (!id || activeProfile !== 'student') return;
+    $('#public-task-dialog').close(); $('#public-profile-dialog').close();
+    await showTab('team');
+    if (activeProfile !== 'student') return;
+    if (!availableTeams.length) { await openTeam(); notify('Сначала создайте команду, затем откройте задачу в профиле бизнеса.'); return; }
+    const task = teamTasks.find((item) => item.id === id);
+    if (task) await showTaskDetails(task, true);
+    else notify('Задача больше не опубликована.', true);
+  });
+  $('#leader-lists').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-public-id]');
+    if (button) run(button, () => openPublicProfile(button.dataset.publicKind, button.dataset.publicId));
+  });
+  $('#public-profile-content').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-public-task]');
+    if (button) run(button, () => openPublicTask(button.dataset.publicTask));
   });
 
   renderFields(); updatePublish(); setStep(1);

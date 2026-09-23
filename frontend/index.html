@@ -32,6 +32,7 @@
         <button class="tab" type="button" data-tab="catalog" aria-selected="false" hidden>Каталог</button>
         <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Отклики</button>
         <button class="tab" type="button" data-tab="team" aria-selected="false" hidden>Команда</button>
+        <button class="tab" type="button" data-tab="leaders" aria-selected="false">Лидеры</button>
       </nav>
 
       <p id="app-message" class="notice" role="status" hidden></p>
@@ -241,6 +242,7 @@
                 </label>
               </div>
 
+              <div class="action-row team-profile-actions"><button id="edit-team-profile" class="secondary-button" type="button">Контакты и профиль команды</button></div>
               <div class="team-profile" id="team-profile"></div>
 
               <div class="section-heading">
@@ -293,8 +295,31 @@
             </aside>
           </div>
         </section>
+        <section id="leaders" class="tab-panel" aria-label="Лидеры" hidden>
+          <div class="panel-header leaders-heading">
+            <div><p class="eyebrow">Люди и результаты</p><h2>Лидеры сообщества</h2><p class="muted">Найдите бизнес с интересными задачами и команду для совместной работы.</p></div>
+            <div class="leader-controls"><label for="leader-period">Период рейтинга</label><select id="leader-period"><option value="month">Этот месяц</option><option value="all">Всё время</option></select><button id="leader-refresh" class="secondary-button" type="button">Обновить рейтинг</button></div>
+          </div>
+          <details class="leader-rules"><summary>Как считается рейтинг</summary><p>Бизнес получает сумму рейтингов задач, созданных за период и опубликованных сейчас и баллы за подтверждённые этапы по своим публичным задачам. Команды — баллы за подтверждённые этапы: прототип +10, проверка с бизнесом +20, принятый результат +30.</p><p>Месяц считается с первого числа по UTC. Стартовые баллы команд учитываются только за всё время. При равенстве баллов выше профиль с большим числом завершённых задач; затем используется постоянный порядок профилей. Открытые задачи показаны за всё время. Демо-профили отмечены отдельно.</p></details>
+          <p id="leader-status" class="muted" role="status" aria-live="polite"></p>
+          <div id="leader-lists" class="leader-columns" aria-busy="false">
+            <section aria-labelledby="business-leaders-title"><div class="section-heading"><h3 id="business-leaders-title">Топ бизнеса</h3><span class="muted">До 10 профилей</span></div><div id="business-leaders" class="leader-list"></div></section>
+            <section aria-labelledby="team-leaders-title"><div class="section-heading"><h3 id="team-leaders-title">Топ команд</h3><span class="muted">До 10 профилей</span></div><div id="team-leaders" class="leader-list"></div></section>
+          </div>
+        </section>
       </main>
     </div>
+    <dialog id="public-profile-dialog" class="public-profile-dialog" aria-labelledby="public-profile-title">
+      <div class="panel-header"><h2 id="public-profile-title">Профиль</h2><button class="icon-button" type="button" data-close="public-profile-dialog" aria-label="Закрыть профиль">×</button></div>
+      <p id="public-profile-error" class="form-error" role="alert"></p>
+      <div id="public-profile-content" aria-live="polite"></div>
+      <button id="public-profile-more" class="secondary-button" type="button" hidden>Показать ещё проекты</button>
+    </dialog>
+    <dialog id="public-task-dialog" class="public-profile-dialog" aria-labelledby="public-task-title">
+      <div class="panel-header"><h2 id="public-task-title">Задача</h2><button class="icon-button" type="button" data-close="public-task-dialog" aria-label="Закрыть задачу">×</button></div>
+      <div id="public-task-content"></div>
+      <button id="public-task-apply" class="primary-button" type="button">Перейти к отклику</button>
+    </dialog>
     <dialog id="participants-dialog" aria-labelledby="participants-title">
       <div class="panel-header"><h2 id="participants-title">Участники</h2><button type="button" class="secondary-button" data-close="participants-dialog" aria-label="Закрыть участников">×</button></div>
       <p class="muted">Демонстрационные профили: вымышленные люди и компании для знакомства с платформой.</p>
@@ -314,6 +339,7 @@
         <div class="field-block"><label for="team-interests">Интересы, через запятую</label><input id="team-interests" name="interests" maxlength="1000"></div>
         <div class="field-block"><label for="team-skills">Навыки, через запятую</label><input id="team-skills" name="skills" maxlength="1000"></div>
         <div class="field-block"><label for="team-tech">Технологии, через запятую</label><input id="team-tech" name="tech" maxlength="1000"></div>
+        <div class="field-block"><label for="team-contact">Контакт для связи</label><input id="team-contact" name="contact" maxlength="500" placeholder="Email или ссылка на страницу команды"><small class="muted">Будет виден бизнесу и другим командам в публичном профиле.</small></div>
         <p id="team-error" class="form-error" role="alert"></p>
         <button class="primary-button" type="submit">Сохранить команду</button>
       </form>
