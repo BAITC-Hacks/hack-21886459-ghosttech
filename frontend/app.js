@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentStep = step;
     document.querySelectorAll('.wizard-step').forEach((button) => {
       const number = Number(button.dataset.step), complete = completedSteps.has(number) && number !== step;
-      button.dataset.label ||= button.textContent;
+      button.dataset.label ||= window.GhostI18n?.originalText(button) || button.textContent;
       button.disabled = assistantBusy || number > unlockedStep;
       button.textContent = `${complete ? '✓ ' : ''}${button.dataset.label}`;
       button.classList.toggle('is-complete', complete);
@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await api.getLeaderboard({ period, limit: 10 });
       if (version !== leaderboardRevision) return;
-      const date = new Date(result.as_of).toLocaleDateString('ru-RU', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+      const date = new Date(result.as_of).toLocaleDateString(window.GhostI18n?.locale() || 'ru-RU', { timeZone: 'UTC', month: 'long', year: 'numeric' });
       $('#leader-status').textContent = `${period === 'month' ? date : 'Рейтинг за всё время'} · ${result.businesses.length} профилей бизнеса и ${result.teams.length} команд`;
       $('#business-leaders').innerHTML = result.businesses.length ? result.businesses.map((row) => rankCard(row, 'business')).join('') : '<p class="placeholder-text">За этот период пока нет опубликованных задач или подтверждённых результатов бизнеса. Попробуйте «Всё время».</p>';
       $('#team-leaders').innerHTML = result.teams.length ? result.teams.map((row) => rankCard(row, 'team')).join('') : '<p class="placeholder-text">За этот период команды ещё не получили баллы за подтверждённые этапы. Попробуйте «Всё время».</p>';
@@ -703,6 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (button) run(button, () => openPublicTask(button.dataset.publicTask));
   });
 
+  document.addEventListener('languagechange', () => { if (!$('#leaders').hidden) run(null, renderLeaderboard); });
   renderFields(); updatePublish(); setStep(1);
   let savedProfile = 'business';
   try {

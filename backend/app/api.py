@@ -69,7 +69,16 @@ def create_app(settings: Settings | None = None):
     @app.get("/{asset}", include_in_schema=False)
     @app.get("/static/{asset}", include_in_schema=False)
     def static_asset(asset: str):
-        if asset not in {"styles.css", "app.js", "api.js", "mock.js"}:
+        if asset not in {
+            "styles.css",
+            "app.js",
+            "api.js",
+            "mock.js",
+            "i18n.js",
+            "i18n.css",
+            "i18n-static.js",
+            "i18n-dynamic.js",
+        }:
             raise HTTPException(404)
         return FileResponse(ROOT_DIR / "frontend" / asset)
 

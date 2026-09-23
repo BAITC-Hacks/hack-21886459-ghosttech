@@ -20,7 +20,7 @@ test:
 	uv run --project backend --locked pytest backend/tests
 
 test-client:
-	node --test frontend/tests/api.test.cjs
+	node --test frontend/tests/*.test.cjs
 
 check:
 	uv run --project backend --locked ruff check backend

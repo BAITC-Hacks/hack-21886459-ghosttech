@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from ai import analyze_task, build_card, get_mode
+from ai_locale import language, parse_language
 from app.api import create_app as create_base_app
 from app.schemas import Card
 from app.scoring import score_card
@@ -30,7 +31,8 @@ def _validation_error(error: ValueError):
         }
         message = f"Поле «{field}»: {messages.get(detail['type'], 'некорректное значение')}."
     return JSONResponse(
-        status_code=422, content={"error": {"code": "validation_error", "message": message}}
+        status_code=422,
+        content={"error": {"code": "validation_error", "message": message}},
     )
 
 
@@ -48,7 +50,11 @@ async def ai_analyze(request: Request):
         data = AnalyzeInput.model_validate(await request.json())
     except ValueError as error:
         return _validation_error(error)
-    result = (await run_in_threadpool(analyze_task, data)).model_dump()
+    token = language.set(parse_language(request.headers.get("accept-language", "ru")))
+    try:
+        result = (await run_in_threadpool(analyze_task, data)).model_dump()
+    finally:
+        language.reset(token)
     result["score"] = score_card(Card(**result["draft_card"])).model_dump()
     return result
 
@@ -59,7 +65,11 @@ async def ai_build_card(request: Request):
         data = BuildCardInput.model_validate(await request.json())
     except ValueError as error:
         return _validation_error(error)
-    return (await run_in_threadpool(build_card, data)).model_dump()
+    token = language.set(parse_language(request.headers.get("accept-language", "ru")))
+    try:
+        return (await run_in_threadpool(build_card, data)).model_dump()
+    finally:
+        language.reset(token)
 
 
 def create_app(settings=None):

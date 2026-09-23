@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GhostTech — задачи и команды</title>
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./i18n.css">
+    <script src="./i18n-static.js" defer></script>
+    <script src="./i18n-dynamic.js" defer></script>
+    <script src="./i18n.js" defer></script>
     <script src="./api.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
@@ -16,6 +20,11 @@
           <h1>Рейтинг качества бизнес-задач</h1>
         </div>
         <div class="account-area">
+          <div class="language-switch" role="group" aria-label="Language / Тіл / Язык" translate="no">
+            <button type="button" data-language="ru" aria-pressed="true" lang="ru">RU</button>
+            <button type="button" data-language="kk" aria-pressed="false" lang="kk">KZ</button>
+            <button type="button" data-language="en" aria-pressed="false" lang="en">EN</button>
+          </div>
           <div class="profile-picker">
             <span id="profile-label" class="muted">Профиль</span>
             <div class="profile-switch" role="group" aria-labelledby="profile-label">

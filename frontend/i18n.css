@@ -1,0 +1,11 @@
+.language-switch { display: flex; gap: 4px; padding: 3px; border: 1px solid currentColor; border-radius: 10px; flex-shrink: 0; }
+.language-switch button { padding: 5px 8px; min-width: 32px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: 600 12px/1.4 system-ui, sans-serif; cursor: pointer; }
+.language-switch button[aria-pressed="true"] { background: var(--accent, #5B5BD6); color: #fff; }
+.language-switch button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.account-area { flex-wrap: wrap; }
+html[lang="kk"] .score-mark-40::after { content: "қола"; }
+html[lang="en"] .score-mark-40::after { content: "bronze"; }
+html[lang="kk"] .score-mark-70::after { content: "күміс"; }
+html[lang="en"] .score-mark-70::after { content: "silver"; }
+html[lang="kk"] .score-mark-90::after { content: "алтын"; }
+html[lang="en"] .score-mark-90::after { content: "gold"; }

@@ -7,7 +7,7 @@
     try {
       response = await fetch(`${baseUrl}${path}`, {
         method, credentials: 'omit', cache: 'no-store',
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        headers: { 'Accept-Language': window.GhostI18n?.language() || 'ru', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {

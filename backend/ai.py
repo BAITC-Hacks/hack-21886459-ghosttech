@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from ai_demo import QUESTION_TEMPLATES, analyze_demo, build_card_demo, check_invented
+from ai_locale import QUESTIONS, language, localize, system_language_instruction
 from schemas_ai import (
     CARD_FIELDS,
     SCORED_FIELDS,
@@ -77,7 +78,11 @@ def _response_format(system_prompt: str) -> dict:
                         {
                             "id": {"type": "string", "minLength": 1, "maxLength": 100},
                             "field": field_name,
-                            "question": {"type": "string", "minLength": 1, "maxLength": 300},
+                            "question": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300,
+                            },
                         }
                     ),
                 },
@@ -116,7 +121,10 @@ def call_model(system_prompt: str, payload: dict) -> dict:
                 response = client.chat.completions.create(
                     model=_setting("OPENAI_MODEL", "gpt-5.4-mini"),
                     messages=[
-                        {"role": "system", "content": system_prompt},
+                        {
+                            "role": "system",
+                            "content": system_prompt + system_language_instruction(),
+                        },
                         {"role": "user", "content": serialized},
                     ],
                     response_format=_response_format(system_prompt),
@@ -162,7 +170,9 @@ def _validate_analyze(raw: dict) -> AnalyzeModel:
         if field not in {question.field for question in questions}:
             questions.append(
                 Question(
-                    id=f"q{len(questions) + 1}", field=field, question=QUESTION_TEMPLATES[field]
+                    id=f"q{len(questions) + 1}",
+                    field=field,
+                    question=QUESTIONS.get(language.get(), QUESTION_TEMPLATES)[field],
                 )
             )
     if len({question.id for question in questions}) != len(questions):
@@ -193,7 +203,9 @@ def _retry_or_demo(function, demo):
             break
         except (ValueError, TypeError) as error:
             logger.warning(
-                "AI response rejected: error_type=%s retry=%s", type(error).__name__, retry
+                "AI response rejected: error_type=%s retry=%s",
+                type(error).__name__,
+                retry,
             )
         except Exception as error:
             logger.warning("AI processing failed: error_type=%s", type(error).__name__)
@@ -213,6 +225,12 @@ def analyze_task(data: AnalyzeInput) -> AnalyzeOutput:
         result["warnings"] = (
             [AI_WARNING] if fallback else ["Деморежим: вопросы шаблонные, анализ ИИ не выполнялся."]
         )
+        for question in result["questions"]:
+            question["question"] = QUESTIONS.get(language.get(), QUESTION_TEMPLATES)[
+                question["field"]
+            ]
+        result["summary"] = localize(result["summary"])
+        result["warnings"] = [localize(item) for item in result["warnings"]]
         return AnalyzeOutput(**result)
 
     if get_mode() == "demo":
@@ -238,7 +256,9 @@ def analyze_task(data: AnalyzeInput) -> AnalyzeOutput:
             parsed.missing_fields = [field for field in SCORED_FIELDS if not draft[field]]
         parsed.draft_card = draft
         return AnalyzeOutput(
-            mode="ai", warnings=list(dict.fromkeys(warnings)), **parsed.model_dump()
+            mode="ai",
+            warnings=[localize(item) for item in dict.fromkeys(warnings)],
+            **parsed.model_dump(),
         )
 
     return _retry_or_demo(attempt, demo)
@@ -249,6 +269,7 @@ def build_card(data: BuildCardInput) -> BuildOutput:
         result = build_card_demo(data.draft_text, data.topic, data.answers)
         if fallback:
             result["warnings"] = list(dict.fromkeys([AI_WARNING, *result["warnings"]]))
+        result["warnings"] = [localize(item) for item in result["warnings"]]
         return BuildOutput(**result)
 
     if get_mode() == "demo":
@@ -269,6 +290,6 @@ def build_card(data: BuildCardInput) -> BuildOutput:
                 ]
             )
         )
-        return BuildOutput(card=card, warnings=warnings, mode="ai")
+        return BuildOutput(card=card, warnings=[localize(item) for item in warnings], mode="ai")
 
     return _retry_or_demo(attempt, demo)
