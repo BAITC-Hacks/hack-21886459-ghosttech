@@ -15,7 +15,8 @@
     }
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      const message = typeof payload.detail === 'string' ? payload.detail
+      const message = typeof payload.error?.message === 'string' ? payload.error.message
+        : typeof payload.detail === 'string' ? payload.detail
         : Array.isArray(payload.detail) ? payload.detail.map((item) => `${item.loc.slice(1).join('.')}: ${item.msg}`).join('; ')
         : `Ошибка сервера (${response.status})`;
       const error = new Error(message);

@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function fillTeamForm() {
     myTeam = availableTeams.find((team) => team.id === $('#team-choice').value) || null;
     for (const key of ['name', 'interests', 'skills', 'tech']) {
-      $(`#team-${key}`).value = key === 'name' ? myTeam?.name || '' : (myTeam?.[key] || []).join(', ');
+      $(key === 'name' ? '#team-dialog-name' : `#team-${key}`).value = key === 'name' ? myTeam?.name || '' : (myTeam?.[key] || []).join(', ');
     }
   }
   async function openTeam() {
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#team-form').addEventListener('submit', (event) => {
     event.preventDefault(); $('#team-error').textContent = '';
     run(event.currentTarget.querySelector('[type="submit"]'), async () => {
-      const payload = { name: $('#team-name').value };
+      const payload = { name: $('#team-dialog-name').value };
       for (const key of ['interests', 'skills', 'tech']) payload[key] = $(`#team-${key}`).value.split(',').map((v) => v.trim()).filter(Boolean);
       myTeam = await (myTeam ? api.updateTeam(myTeam.id, payload) : api.createTeam(payload));
       selectedTeamId = myTeam.id;
@@ -209,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const meta = levelMeta[result.level];
     $('#score-level').textContent = meta.label; $('#score-level').className = `level-badge level-${result.level}`;
     $('#score-value').textContent = result.score;
+    $('#score-current').textContent = result.score;
     $('#score-progress').style.width = `${result.score}%`; $('#score-progress').style.background = meta.color;
     $('#breakdown-list').innerHTML = result.breakdown.map((row) => `<li class="breakdown-item"><div class="breakdown-line"><strong>${escape(row.label)} · ${row.earned}/${row.max}${row.earned === row.max ? ' ✓' : ''}</strong><span>${escape(row.reason)}</span></div><span class="field-progress"><span style="width: ${row.max ? Math.round(row.earned / row.max * 100) : 0}%"></span></span></li>`).join('');
     $('#tips-list').innerHTML = result.missing.length ? result.missing.slice(0, 4).map((row) => `<li><strong>+${row.potential_points} ${plural(row.potential_points, ['балл', 'балла', 'баллов'])} · ${escape(result.breakdown.find((item) => item.field === row.field)?.label || row.field)}</strong><span>${escape(row.hint)}</span></li>`).join('') : '<li>Задача полностью готова 🎉</li>';
@@ -237,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
   onClick('#analyze-button', () => withAssistant('#analyze-button', 'Анализируем…', async () => {
     const result = await api.analyzeTask({ draft_text: $('#draft-text').value, topic: $('#task-topic').value });
     questions = result.questions;
-    $('#question-list').innerHTML = questions.map((q) => `<div class="question-item"><small>${escape(q.field)}</small><label for="answer-${escape(q.id)}">${escape(q.question)}</label><textarea id="answer-${escape(q.id)}" maxlength="5000" placeholder="Напишите ответ..."></textarea></div>`).join('');
+    $('#question-list').innerHTML = questions.map((q) => `<div class="question-item"><small>${escape(q.field)}</small><label for="answer-${escape(q.id)}">${escape(q.question)}</label><textarea id="answer-${escape(q.id)}" maxlength="1000" placeholder="Напишите ответ..."></textarea></div>`).join('');
     $('#questions-counter').textContent = `${questions.length} ${plural(questions.length, ['вопрос', 'вопроса', 'вопросов'])}`;
     completedSteps.clear(); completedSteps.add(1); unlockedStep = 2;
     $('#confirm-check').checked = false; updatePublish();
@@ -511,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
   run(null, async () => {
     const health = await api.getHealth();
     $('#mode-label').textContent = health.mode === 'demo' ? 'Деморежим · без ИИ'
-      : health.ai_configured ? 'Помощник: OpenAI' : 'OpenAI · требуется настройка';
+      : (health.mode === 'ai' || health.ai_configured) ? 'Помощник: OpenAI' : 'OpenAI · требуется настройка';
     await Promise.all([refreshScore(), loadTopics(), loadParticipants()]);
   });
 });

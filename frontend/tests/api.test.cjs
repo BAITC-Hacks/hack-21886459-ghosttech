@@ -69,3 +69,11 @@ test('demo directory and catalog keep role, author and Unicode search filters', 
   assert.equal(query.get('search'), 'УЧЁТ');
   assert.equal(query.get('topic'), 'образование');
 });
+
+
+test('AI validation errors preserve the new server error message', async () => {
+  const api = client(async () => ({ ok: false, status: 422, json: async () => ({
+    error: { code: 'validation_error', message: 'Заполните тему задачи.' },
+  }) }));
+  await assert.rejects(api.analyzeTask({}), (error) => error.status === 422 && error.message === 'Заполните тему задачи.');
+});
