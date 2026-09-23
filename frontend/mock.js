@@ -148,7 +148,8 @@ window.mockApi = (() => {
 
     createTask: ({ card, confirmed = false }) => {
       const safeCard = { ...card };
-      const id = `t${cardData.length + 1}`;
+      const taskStore = getCards();
+      const id = `t${taskStore.length + 1}`;
       const scored = scoreCard(safeCard);
       const task = {
         id,
@@ -161,7 +162,7 @@ window.mockApi = (() => {
         confirmed,
         proposals: []
       };
-      cardData.push(task);
+      taskStore.push(task);
       return makeTaskPayload(task);
     },
 

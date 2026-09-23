@@ -66,6 +66,7 @@
                 <button id="analyze-button" class="primary-button" type="button">Проанализировать</button>
                 <button id="sample-button" class="secondary-button" type="button">Подставить пример</button>
               </div>
+              <p id="analyze-status" class="ai-status" aria-live="polite"></p>
             </div>
 
             <div class="wizard-panel" data-panel="2" hidden>
@@ -77,9 +78,11 @@
               <div class="action-row">
                 <button id="build-card-button" class="primary-button" type="button">Собрать карточку</button>
               </div>
+              <p id="build-status" class="ai-status" aria-live="polite"></p>
             </div>
 
             <div class="wizard-panel" data-panel="3" hidden>
+              <div id="card-warnings" class="warning-box" hidden></div>
               <div class="card-layout">
                 <div id="card-form" class="card-form"></div>
 
@@ -89,9 +92,14 @@
                     <span id="score-level" class="level-badge level-draft">Черновик</span>
                   </div>
                   <div id="score-value" class="score-value">0</div>
+                  <div class="score-delta" aria-live="polite"><span id="score-start">Черновик: 0</span><span>→ сейчас: <strong id="score-current">0</strong></span><span id="score-gain" class="score-gain"></span></div>
                   <div class="progress-track" aria-label="Прогресс рейтинга">
                     <span id="score-progress" class="progress-bar"></span>
+                    <span class="score-mark score-mark-40"><i>40</i><b>Рабочая</b></span>
+                    <span class="score-mark score-mark-70"><i>70</i><b>Готовая</b></span>
+                    <span class="score-mark score-mark-90"><i>90</i><b>Приоритетная</b></span>
                   </div>
+                  <p id="catalog-position" class="catalog-position">Место в каталоге: —</p>
                   <div class="score-breakdown">
                     <h4>Расшифровка по полям</h4>
                     <ul id="breakdown-list" class="breakdown-list"></ul>
@@ -233,11 +241,12 @@
         </section>
       </main>
     </div>
-    <dialog id="team-dialog" aria-labelledby="team-title">
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="team-dialog" aria-labelledby="team-dialog-title">
       <form id="team-form">
-        <div class="panel-header"><h2 id="team-title">Команды</h2><button type="button" class="secondary-button" data-close="team-dialog" aria-label="Закрыть">×</button></div>
+        <div class="panel-header"><h2 id="team-dialog-title">Команды</h2><button type="button" class="secondary-button" data-close="team-dialog" aria-label="Закрыть">×</button></div>
         <div class="field-block"><label for="team-choice">Выберите команду или создайте новую</label><select id="team-choice"><option value="">Новая команда</option></select></div>
-        <div class="field-block"><label for="team-name">Название</label><input id="team-name" name="name" required maxlength="100"></div>
+        <div class="field-block"><label for="team-dialog-name">Название</label><input id="team-dialog-name" name="name" required maxlength="100"></div>
         <div class="field-block"><label for="team-interests">Интересы, через запятую</label><input id="team-interests" name="interests" maxlength="1000"></div>
         <div class="field-block"><label for="team-skills">Навыки, через запятую</label><input id="team-skills" name="skills" maxlength="1000"></div>
         <div class="field-block"><label for="team-tech">Технологии, через запятую</label><input id="team-tech" name="tech" maxlength="1000"></div>
