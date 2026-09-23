@@ -9,6 +9,8 @@ window.mockApi = (() => {
   const getTeams = () => window.__mockData?.teams || teamData;
   const getProposalData = () => window.__mockData?.proposals || proposalData;
 
+  const getFieldHints = () => window.fieldHints || {};
+
   const FIELD_CONFIG = {
     context: { max: 10, full: 40, half: 10 },
     need: { max: 10, full: 40, half: 10 },
@@ -37,24 +39,36 @@ window.mockApi = (() => {
   };
 
   const scoreCard = (card) => {
-    const breakdown = Object.keys(FIELD_CONFIG).map((field) => {
+    const hints = getFieldHints();
+    const fields = Object.keys(hints).length ? Object.keys(hints) : Object.keys(FIELD_CONFIG);
+    const breakdown = fields.map((field) => {
       const value = card[field] || '';
       const earned = scoreField(field, value);
-      const max = FIELD_CONFIG[field].max;
-      const label = field.replace(/_/g, ' ');
-      return { field, label, max, earned, reason: 'Проверка по формуле рейтинга' };
+      const max = hints[field]?.max ?? FIELD_CONFIG[field]?.max ?? 0;
+      const label = hints[field]?.label || field.replace(/_/g, ' ');
+      const reason = earned === 0
+        ? 'не указано'
+        : earned >= max
+          ? 'заполнено'
+          : field === 'success_criteria'
+            ? 'нет измеримого показателя'
+            : 'описано кратко';
+      return { field, label, max, earned, reason };
     });
 
     const total = breakdown.reduce((sum, row) => sum + row.earned, 0);
     const score = Math.min(total, 100);
     const level = score >= 90 ? 'priority' : score >= 70 ? 'ready' : score >= 40 ? 'working' : 'draft';
-    const missing = Object.keys(FIELD_CONFIG)
-      .filter((field) => scoreField(field, card[field] || '') === 0)
+    const missing = fields
+      .map((field) => ({ field, earned: scoreField(field, card[field] || ''), max: hints[field]?.max ?? FIELD_CONFIG[field]?.max ?? 0 }))
+      .filter(({ earned, max }) => earned < max)
       .map((field) => ({
-        field,
-        hint: field === 'success_criteria' ? 'Добавьте измеримый критерий успеха: например, «сократить время на 30%».' : 'Добавьте более подробную информацию, чтобы повысить рейтинг задачи.',
-        potential_points: FIELD_CONFIG[field].max
-      }));
+        field: field.field,
+        hint: field.earned === 0 ? hints[field.field]?.hint_empty : hints[field.field]?.hint_partial,
+        potential_points: field.max - field.earned
+      }))
+      .filter((item) => item.potential_points > 0)
+      .sort((left, right) => right.potential_points - left.potential_points);
 
     return { score, level, breakdown, missing };
   };

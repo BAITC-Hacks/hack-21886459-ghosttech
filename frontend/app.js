@@ -1,4 +1,27 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const fallbackFieldHints = {
+    title: { label: 'Название', max: 0, hint_empty: 'Добавьте короткое название задачи — без него публикация невозможна.', hint_partial: '' },
+    topic: { label: 'Тема', max: 0, hint_empty: 'Выберите тему — по ней студенты фильтруют каталог.', hint_partial: '' },
+    context: { label: 'Контекст', max: 10, hint_empty: 'Опишите, как всё устроено сейчас: кто и как решает эту задачу сегодня.', hint_partial: 'Добавьте деталей о текущей ситуации: что именно происходит и где неудобно.' },
+    need: { label: 'Потребность', max: 10, hint_empty: 'Сформулируйте, что именно нужно изменить или улучшить.', hint_partial: 'Уточните потребность: какую проблему должно снять решение.' },
+    data: { label: 'Данные и материалы', max: 20, hint_empty: 'Укажите, какие данные есть: выгрузки, таблицы, примеры документов, источники.', hint_partial: 'Уточните формат и объём данных: например, «Excel за 2 месяца, ~300 строк».' },
+    expected_result: { label: 'Ожидаемый результат', max: 15, hint_empty: 'Опишите, что команда должна сдать в итоге: прототип, дашборд, бот, отчёт.', hint_partial: 'Конкретизируйте результат: что именно должно работать в конце.' },
+    success_criteria: { label: 'Критерии успеха', max: 15, hint_empty: 'Добавьте измеримый признак успеха, например «отметка посещаемости занимает до 1 минуты».', hint_partial: 'Добавьте число или процент — так критерий станет измеримым.' },
+    constraints: { label: 'Ограничения', max: 10, hint_empty: 'Укажите сроки, технологии, доступы или другие границы работы.', hint_partial: 'Уточните ограничения: срок, стек, доступ к системам.' },
+    users: { label: 'Пользователи', max: 10, hint_empty: 'Опишите, кто будет пользоваться решением: сотрудники, клиенты, родители.', hint_partial: 'Уточните пользователей: роли, сколько их, в какой ситуации они работают.' },
+    contact: { label: 'Контакт', max: 5, hint_empty: 'Укажите контакт для связи с командой (email).', hint_partial: '' },
+    interaction_format: { label: 'Формат взаимодействия', max: 5, hint_empty: 'Опишите формат: как часто созвоны, как даёте обратную связь.', hint_partial: '' }
+  };
+
+  window.fieldHints = fallbackFieldHints;
+  const fieldHintsReady = fetch('../prompts/field_hints.json')
+    .then((response) => response.ok ? response.json() : Promise.reject(new Error('field_hints.json недоступен')))
+    .then((hints) => {
+      window.fieldHints = hints;
+      return hints;
+    })
+    .catch(() => fallbackFieldHints);
+
   const tabButtons = document.querySelectorAll('[data-tab]');
   const tabPanels = document.querySelectorAll('.tab-panel');
 
@@ -319,14 +342,15 @@ document.addEventListener('DOMContentLoaded', () => {
     cardForm.innerHTML = fields.map((field) => {
       const value = cardState[field.key] || '';
       const wrapperClass = field.full ? 'field-block full' : 'field-block';
-      const maxScore = { context: 10, need: 10, data: 20, expected_result: 15, success_criteria: 15, constraints: 10, users: 10, contact: 5, interaction_format: 5 }[field.key] ?? 0;
+      const fieldHint = window.fieldHints[field.key] || {};
+      const maxScore = fieldHint.max ?? 0;
       const earned = field.key === 'title' || field.key === 'topic' ? 0 : (window.mockApi?.scoreCard ? window.mockApi.scoreCard({ card: cardState }).breakdown.find((item) => item.field === field.key)?.earned || 0 : 0);
       const scoreLabel = field.key === 'title' || field.key === 'topic' ? 'обязательно' : `${earned}/${maxScore}`;
       const check = earned >= maxScore && maxScore > 0 ? ' ✓' : '';
 
       return `
         <div class="${wrapperClass}">
-          <label for="field-${field.key}">${field.label} · ${scoreLabel}${check}</label>
+          <label for="field-${field.key}">${fieldHint.label || field.label} · ${scoreLabel}${check}</label>
           <textarea id="field-${field.key}" data-field="${field.key}">${value}</textarea>
         </div>
       `;
@@ -381,13 +405,18 @@ document.addEventListener('DOMContentLoaded', () => {
     scoreProgress.style.background = level.color;
 
     breakdownList.innerHTML = (result.breakdown || []).map((item) => {
-      const label = item.label.replace('_', ' ');
-      const check = item.earned >= item.max ? ' ✓' : '';
-      return `<li><strong>${label}</strong> · ${item.earned}/${item.max}${check}</li>`;
+      const fieldHint = window.fieldHints[item.field] || {};
+      const label = fieldHint.label || item.label || item.field;
+      const check = item.max > 0 && item.earned >= item.max ? ' ✓' : '';
+      const progress = item.max ? Math.round((item.earned / item.max) * 100) : 0;
+      return `<li class="breakdown-item"><div class="breakdown-line"><strong>${label} · ${item.earned}/${item.max}${check}</strong><span>${item.reason || ''}</span></div><span class="field-progress"><span style="width: ${progress}%"></span></span></li>`;
     }).join('') || '<li>Пустой рейтинг</li>';
 
-    const tips = (result.missing || []).slice(0, 4).map((item) => `<li>+${item.potential_points} баллов: ${item.hint}</li>`);
-    tipsList.innerHTML = tips.length ? tips.join('') : '<li>Поля уже достаточно полные. Можно публиковать задачу.</li>';
+    const tips = (result.missing || []).slice(0, 4).map((item) => {
+      const fieldHint = window.fieldHints[item.field] || {};
+      return `<li><strong>+${item.potential_points} баллов · ${fieldHint.label || item.field}</strong><span>${item.hint}</span></li>`;
+    });
+    tipsList.innerHTML = tips.length ? tips.join('') : '<li>Задача полностью готова 🎉</li>';
 
     animateScore(targetValue);
   };
@@ -511,4 +540,8 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshScore();
   updatePublishButton();
   setStep(1);
+  fieldHintsReady.then(() => {
+    renderCardForm();
+    refreshScore();
+  });
 });

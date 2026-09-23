@@ -677,6 +677,47 @@ textarea {
   line-height: 1.4;
 }
 
+.breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.breakdown-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.breakdown-line span,
+.tips-list li span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.field-progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.field-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ready);
+  transition: width 0.25s ease;
+}
+
+.tips-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .breakdown-list strong {
   font-weight: 600;
 }
