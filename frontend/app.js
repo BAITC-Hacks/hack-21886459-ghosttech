@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let card = Object.fromEntries(fields.map(([key]) => [key, '']));
   let catalogTasks = [], catalogRevision = 0, proposalRevision = 0, scoreRevision = 0, scoreTimer;
   let selectedTeamId = null, teamTasks = [], teamProposals = [], selectedTask = null, teamRevision = 0;
-  let unlockedStep = 1, currentStep = 1, assistantBusy = false;
+  let unlockedStep = 1, currentStep = 1, assistantBusy = false, initialScore = null;
   const completedSteps = new Set();
   const readiness = {
     draft: 'Потребуются уточнения у бизнеса', working: 'Возможны уточнения',
@@ -125,6 +125,24 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderFields() {
     $('#card-form').innerHTML = fields.map(([key, label]) => `<div class="field-block ${['contact', 'interaction_format'].includes(key) ? '' : 'full'}"><label for="field-${key}" id="label-${key}">${label}</label><textarea id="field-${key}" data-field="${key}" maxlength="${key === 'title' ? 200 : key === 'topic' ? 100 : key === 'contact' ? 500 : 5000}">${escape(card[key])}</textarea></div>`).join('');
   }
+  function showAssistantMode(result, target) {
+    const live = result.mode === 'ai' || result.mode === 'openai';
+    $('#mode-label').textContent = live ? 'Ответ OpenAI' : 'Деморежим · шаблонные вопросы';
+    $(target).textContent = live ? 'Описание обработано ИИ.' : 'Ответ ИИ не получен. Показан деморезультат.';
+    $(target).classList.toggle('is-demo', !live);
+  }
+  function renderAnalysis(result) {
+    const label = (key) => fields.find(([field]) => field === key)?.[1] || key;
+    $('#analysis-summary').textContent = result.summary || 'Проверьте найденные сведения и ответьте на вопросы ниже.';
+    $('#analysis-score').textContent = `${result.score.score}/100`;
+    $('#analysis-level').textContent = levelMeta[result.score.level].label;
+    $('#analysis-filled').textContent = result.filled_fields.length ? result.filled_fields.map(label).join(' · ') : 'Пока недостаточно сведений';
+    $('#analysis-missing').textContent = result.missing_fields.length ? result.missing_fields.map(label).join(' · ') : 'Основные поля описаны — уточним детали приёмки';
+    $('#analysis-details').innerHTML = result.score.breakdown.map((row) => `<li><strong>${escape(row.label)}: ${row.earned}/${row.max}</strong> — ${escape(row.reason)}</li>`).join('');
+    $('#analysis-warning').textContent = (result.warnings || []).join(' ');
+    $('#analysis-warning').hidden = !result.warnings?.length;
+    $('#draft-analysis').hidden = false;
+  }
   async function refreshScore() {
     const version = ++scoreRevision;
     const result = await api.scoreCard({ card: { ...card } });
@@ -132,6 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const meta = levelMeta[result.level];
     $('#score-level').textContent = meta.label; $('#score-level').className = `level-badge level-${result.level}`;
     $('#score-value').textContent = result.score;
+    $('#score-start').textContent = `Черновик: ${initialScore ?? result.score}`;
+    $('#score-current').textContent = result.score;
+    const gain = result.score - (initialScore ?? result.score);
+    $('#score-gain').textContent = gain ? `${gain > 0 ? '+' : ''}${gain} ${plural(Math.abs(gain), ['балл', 'балла', 'баллов'])}` : '';
     $('#score-progress').style.width = `${result.score}%`; $('#score-progress').style.background = meta.color;
     $('#breakdown-list').innerHTML = result.breakdown.map((row) => `<li class="breakdown-item"><div class="breakdown-line"><strong>${escape(row.label)} · ${row.earned}/${row.max}${row.earned === row.max ? ' ✓' : ''}</strong><span>${escape(row.reason)}</span></div><span class="field-progress"><span style="width: ${row.max ? Math.round(row.earned / row.max * 100) : 0}%"></span></span></li>`).join('');
     $('#tips-list').innerHTML = result.missing.length ? result.missing.slice(0, 4).map((row) => `<li><strong>+${row.potential_points} ${plural(row.potential_points, ['балл', 'балла', 'баллов'])} · ${escape(result.breakdown.find((item) => item.field === row.field)?.label || row.field)}</strong><span>${escape(row.hint)}</span></li>`).join('') : '<li>Задача полностью готова 🎉</li>';
@@ -155,25 +177,50 @@ document.addEventListener('DOMContentLoaded', () => {
     card = Object.fromEntries(fields.map(([key]) => [key, ''])); renderFields();
     $('#confirm-check').checked = false; $('#publish-message').textContent = ''; updatePublish();
     $('#question-list').replaceChildren(); $('#questions-counter').textContent = '0 вопросов';
+    initialScore = null; $('#draft-analysis').hidden = true;
+    $('#analyze-status').textContent = ''; $('#build-status').textContent = '';
+    $('#card-warnings').hidden = true;
     await refreshScore();
   });
   onClick('#analyze-button', () => withAssistant('#analyze-button', 'Анализируем…', async () => {
+    $('#analyze-status').textContent = 'Разбираем описание и готовим вопросы по вашей задаче…';
     const result = await api.analyzeTask({ draft_text: $('#draft-text').value, topic: $('#task-topic').value });
     questions = result.questions;
-    $('#question-list').innerHTML = questions.map((q) => `<div class="question-item"><small>${escape(q.field)}</small><label for="answer-${escape(q.id)}">${escape(q.question)}</label><textarea id="answer-${escape(q.id)}" maxlength="5000" placeholder="Напишите ответ..."></textarea></div>`).join('');
+    card = result.draft_card; initialScore = result.score.score; publishedId = null;
+    renderFields(); renderAnalysis(result); await refreshScore();
+    showAssistantMode(result, '#build-status');
+    $('#analyze-status').textContent = result.mode === 'ai' ? 'Анализ описания готов.' : 'Показан демоанализ.';
+    $('#question-list').innerHTML = questions.map((q) => `<div class="question-item"><small>${escape(fields.find(([key]) => key === q.field)?.[1] || q.field)}</small><label for="answer-${escape(q.id)}">${escape(q.question)}</label><textarea id="answer-${escape(q.id)}" maxlength="1000" placeholder="Напишите ответ..."></textarea></div>`).join('');
     $('#questions-counter').textContent = `${questions.length} ${plural(questions.length, ['вопрос', 'вопроса', 'вопросов'])}`;
     completedSteps.clear(); completedSteps.add(1); unlockedStep = 2;
     $('#confirm-check').checked = false; updatePublish();
     setStep(2); notify('');
   }));
   onClick('#build-card-button', () => withAssistant('#build-card-button', 'Собираем карточку…', async () => {
+    $('#build-status').textContent = 'Собираем карточку из описания и ваших ответов…';
     const result = await api.buildCard({ draft_text: $('#draft-text').value, topic: $('#task-topic').value,
-      answers: questions.map((q) => ({ question_id: q.id, field: q.field, answer: document.getElementById(`answer-${q.id}`).value })) });
+      answers: questions.map((q) => ({ question_id: q.id, field: q.field, question: q.question, answer: document.getElementById(`answer-${q.id}`).value })) });
     card = result.card; publishedId = null; $('#confirm-check').checked = false;
     completedSteps.add(2); unlockedStep = 4;
     renderFields(); updatePublish(); await refreshScore(); setStep(3);
-    if (result.warnings.length) notify(result.warnings.join(' '));
+    showAssistantMode(result, '#build-status');
+    $('#card-warnings').textContent = result.warnings.join(' ');
+    $('#card-warnings').hidden = !result.warnings.length;
+    notify(result.mode === 'ai' ? 'Карточка собрана ИИ. Проверьте сведения перед публикацией.' : 'Использован деморежим. Проверьте карточку и предупреждения.');
   }));
+  function invalidateDraft() {
+    if (!questions.length && initialScore === null) return;
+    questions = []; initialScore = null; publishedId = null;
+    completedSteps.clear(); unlockedStep = 1;
+    card = Object.fromEntries(fields.map(([key]) => [key, ''])); renderFields();
+    $('#confirm-check').checked = false; $('#draft-analysis').hidden = true;
+    $('#question-list').replaceChildren(); $('#card-warnings').hidden = true;
+    $('#analyze-status').textContent = 'Описание изменилось — проанализируйте его заново.';
+    $('#build-status').textContent = ''; $('#publish-message').textContent = '';
+    setStep(1); updatePublish(); run(null, refreshScore);
+  }
+  $('#draft-text').addEventListener('input', invalidateDraft);
+  $('#task-topic').addEventListener('change', invalidateDraft);
   $('#confirm-check').addEventListener('change', updatePublish);
   onClick('#publish-button', async () => {
     if (!$('#confirm-check').checked || !card.title.trim() || !card.topic.trim()) return;
@@ -363,8 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderFields(); updatePublish(); setStep(1);
   run(null, async () => {
     const health = await api.getHealth();
-    $('#mode-label').textContent = health.mode === 'demo' ? 'Деморежим · без ИИ'
-      : health.ai_configured ? 'Помощник: OpenAI' : 'OpenAI · требуется настройка';
+    $('#mode-label').textContent = health.mode === 'demo' ? 'Деморежим · шаблонные вопросы' : 'ИИ включён · OpenAI';
     await refreshScore();
   });
 });

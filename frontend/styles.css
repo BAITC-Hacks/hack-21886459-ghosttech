@@ -1120,3 +1120,12 @@ button:disabled { opacity: .55; cursor: wait; }
 
 .task-card-footer { flex-wrap: wrap; }
 .task-card-footer > span { flex-basis: 100%; }
+
+.draft-analysis { padding: 20px; margin-bottom: 24px; border: 1px solid var(--primary-border); border-radius: var(--radius); background: var(--primary-soft); }
+.analysis-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#analysis-score { font-size: 1.5rem; color: var(--primary); white-space: nowrap; }
+.draft-analysis p { margin: 12px 0; }
+.draft-analysis summary { cursor: pointer; color: var(--primary); }
+#analysis-details { padding-left: 20px; }
+#analysis-details li { margin-top: 6px; }
+.ai-status.is-demo { color: #92400e; }

@@ -45,7 +45,7 @@
             <div class="wizard-panel" data-panel="1">
               <div class="field-block">
                 <label for="draft-text">Черновик задачи</label>
-                <textarea id="draft-text" rows="8" placeholder="Опишите проблему, потребность и текущую ситуацию..."></textarea>
+                <textarea id="draft-text" rows="8" maxlength="3000" placeholder="Опишите проблему, потребность и текущую ситуацию..."></textarea>
               </div>
 
               <div class="field-row two-columns">
@@ -74,6 +74,15 @@
                 <h3>Уточнение деталей</h3>
                 <span id="questions-counter" class="muted">0 вопросов</span>
               </div>
+              <section id="draft-analysis" class="draft-analysis" aria-label="Анализ описания" hidden>
+                <div class="analysis-heading"><h3>Что понятно из вашего описания</h3><strong id="analysis-score"></strong></div>
+                <p id="analysis-summary"></p>
+                <p class="muted">Предварительная готовность: <span id="analysis-level"></span>. Баллы рассчитаны по найденным сведениям; перед публикацией их нужно подтвердить.</p>
+                <p><strong>Уже описано:</strong> <span id="analysis-filled"></span></p>
+                <p><strong>Нужно уточнить:</strong> <span id="analysis-missing"></span></p>
+                <details><summary>За что начислены баллы</summary><ul id="analysis-details"></ul></details>
+                <p id="analysis-warning" class="warning-box" role="status" hidden></p>
+              </section>
               <div id="question-list" class="questions-list"></div>
               <div class="action-row">
                 <button id="build-card-button" class="primary-button" type="button">Собрать карточку</button>
@@ -88,7 +97,7 @@
 
                 <aside class="score-panel">
                   <div class="score-header">
-                    <span class="score-label">Рейтинг готовности</span>
+                    <span class="score-label">Предварительный рейтинг готовности</span>
                     <span id="score-level" class="level-badge level-draft">Черновик</span>
                   </div>
                   <div id="score-value" class="score-value">0</div>

@@ -40,6 +40,7 @@ class AnswerInput(AIInput):
     question_id: str = Field(min_length=1, max_length=100)
     field: FieldName
     answer: str = Field(max_length=1000)
+    question: str = Field(default="", max_length=300)
 
 
 class BuildCardInput(AnalyzeInput):
@@ -60,6 +61,8 @@ class Question(BaseModel):
 
 
 class AnalyzeModel(BaseModel):
+    summary: str = Field(default="", max_length=1200)
+    draft_card: dict = Field(default_factory=dict)
     questions: list[Question] = Field(min_length=1, max_length=5)
     filled_fields: list[FieldName] = Field(default_factory=list)
     missing_fields: list[FieldName] = Field(default_factory=list)
@@ -81,6 +84,7 @@ class AnalyzeModel(BaseModel):
 
 
 class AnalyzeOutput(AnalyzeModel):
+    warnings: list[str] = Field(default_factory=list)
     mode: Literal["ai", "demo"]
 
 

@@ -52,3 +52,10 @@ test('team workspace loads server proposals with filters and pagination', async 
   }, '8000');
   assert.deepEqual(await api.getTeamProposals({ team_id: 'team1', offset: 0, limit: 100 }), [{ id: 'p1', team_id: 'team1' }]);
 });
+
+test('AI validation errors show the Russian server message', async () => {
+  const api = client(async () => ({ ok: false, status: 422, json: async () => ({
+    error: { code: 'validation_error', message: 'Описание должно содержать минимум 10 символов.' },
+  }) }));
+  await assert.rejects(api.analyzeTask({}), (error) => error.status === 422 && error.message.includes('минимум 10'));
+});
