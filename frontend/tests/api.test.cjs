@@ -77,3 +77,10 @@ test('AI validation errors preserve the new server error message', async () => {
   }) }));
   await assert.rejects(api.analyzeTask({}), (error) => error.status === 422 && error.message === 'Заполните тему задачи.');
 });
+
+test('AI validation errors show the Russian server message', async () => {
+  const api = client(async () => ({ ok: false, status: 422, json: async () => ({
+    error: { code: 'validation_error', message: 'Описание должно содержать минимум 10 символов.' },
+  }) }));
+  await assert.rejects(api.analyzeTask({}), (error) => error.status === 422 && error.message.includes('минимум 10'));
+});

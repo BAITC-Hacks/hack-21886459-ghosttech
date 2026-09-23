@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from ai import analyze_task, build_card, get_mode
 from app.api import create_app as create_base_app
+from app.schemas import Card
+from app.scoring import score_card
 from schemas_ai import AnalyzeInput, BuildCardInput
 
 
@@ -46,7 +48,9 @@ async def ai_analyze(request: Request):
         data = AnalyzeInput.model_validate(await request.json())
     except ValueError as error:
         return _validation_error(error)
-    return (await run_in_threadpool(analyze_task, data)).model_dump()
+    result = (await run_in_threadpool(analyze_task, data)).model_dump()
+    result["score"] = score_card(Card(**result["draft_card"])).model_dump()
+    return result
 
 
 @ai_router.post("/tasks/build-card", tags=["assistant"])

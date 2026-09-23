@@ -336,3 +336,76 @@ def test_extra_questions_are_trimmed(monkeypatch):
     enable_ai(monkeypatch, lambda *_: raw)
     result = analyze_task(AnalyzeInput(**INPUT))
     assert result.mode == "ai" and len(result.questions) == 5
+
+
+def test_analysis_scores_only_facts_in_the_draft(client, monkeypatch):
+    raw = {
+        "summary": "Заказчик хочет улучшить рабочий процесс. Нужны данные и критерии приёмки.",
+        "draft_card": {
+            "title": "Улучшение процесса",
+            "need": DRAFT,
+            "data": "Есть база на 10000 клиентов",
+            "topic": "чужая тема",
+        },
+        **one_question(),
+    }
+    enable_ai(monkeypatch, lambda *_: raw)
+    response = client.post("/api/tasks/analyze", json=INPUT)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["mode"] == "ai" and result["summary"] == raw["summary"]
+    assert result["draft_card"]["need"] == DRAFT
+    assert result["draft_card"]["data"] == ""
+    assert result["draft_card"]["topic"] == INPUT["topic"]
+    assert result["filled_fields"] == ["need"]
+    assert "data" in result["missing_fields"]
+    scored = client.post("/api/tasks/score", json={"card": result["draft_card"]}).json()
+    assert result["score"] == scored
+    assert result["warnings"]
+
+
+def test_analyze_fallback_is_visible_to_the_user(client, monkeypatch):
+    def unavailable(*_):
+        raise AIError("offline")
+
+    enable_ai(monkeypatch, unavailable)
+    result = client.post("/api/tasks/analyze", json=INPUT).json()
+    assert result["mode"] == "demo"
+    assert ai.AI_WARNING in result["warnings"]
+    assert "ключевым словам" in result["summary"]
+    assert 0 <= result["score"]["score"] <= 100
+
+
+def test_question_context_is_forwarded_for_short_answers(monkeypatch):
+    question = "Нужен ли отчёт по списаниям хлеба за каждый день?"
+
+    def fake(prompt, payload):
+        assert payload["answers"][0]["question"] == question
+        assert payload["answers"][0]["answer"] == "Да"
+        return {"card": {"expected_result": "Отчёт по списаниям хлеба за каждый день"}}
+
+    enable_ai(monkeypatch, fake)
+    result = build_card(
+        BuildCardInput(
+            **INPUT,
+            answers=[
+                {
+                    "question_id": "q1",
+                    "field": "expected_result",
+                    "question": question,
+                    "answer": "Да",
+                }
+            ],
+        )
+    )
+    assert result.mode == "ai"
+    assert "хлеба" in result.card["expected_result"]
+
+
+def test_live_output_schema_constrains_question_fields():
+    schema = ai._response_format(ai.ANALYZE_PROMPT)["json_schema"]
+    assert schema["strict"] is True
+    properties = schema["schema"]["properties"]
+    assert properties["questions"]["minItems"] == 3
+    assert "topic" not in properties["filled_fields"]["items"]["enum"]
+    assert set(properties["draft_card"]["required"]) == set(CARD_FIELDS)
