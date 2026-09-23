@@ -1,0 +1,1669 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GhostTech API",
+    "description": "Бизнес-задачи, рейтинг, команды, отклики и этапы работы.",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/analyze": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Analyze",
+        "operationId": "analyze_api_tasks_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/build-card": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Build Card",
+        "operationId": "build_card_api_tasks_build_card_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/score": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Score",
+        "operationId": "score_api_tasks_score_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Score"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Tasks",
+        "operationId": "tasks_api_tasks_get",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Topic"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "working",
+                    "ready",
+                    "priority"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "include_drafts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Drafts"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskSummary"
+                  },
+                  "title": "Response Tasks Api Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Task",
+        "operationId": "create_task_api_tasks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task",
+        "operationId": "get_task_api_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Update Task",
+        "operationId": "update_task_api_tasks__task_id__patch",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Teams",
+        "operationId": "teams_api_teams_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamRead"
+                  },
+                  "title": "Response Teams Api Teams Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Create Team",
+        "operationId": "create_team_api_teams_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{team_id}": {
+      "patch": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Update Team",
+        "operationId": "update_team_api_teams__team_id__patch",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/proposals": {
+      "post": {
+        "tags": [
+          "proposals"
+        ],
+        "summary": "Create Proposal",
+        "operationId": "create_proposal_api_tasks__task_id__proposals_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "proposals"
+        ],
+        "summary": "Get Proposals",
+        "operationId": "get_proposals_api_tasks__task_id__proposals_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalRead"
+                  },
+                  "title": "Response Get Proposals Api Tasks  Task Id  Proposals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/proposals/{proposal_id}/decision": {
+      "patch": {
+        "tags": [
+          "proposals"
+        ],
+        "summary": "Decide",
+        "operationId": "decide_api_proposals__proposal_id__decision_patch",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/proposals/{proposal_id}/progress": {
+      "post": {
+        "tags": [
+          "proposals"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_proposals__proposal_id__progress_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProgressCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalyzeRead": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "filled_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "title",
+                "topic",
+                "context",
+                "need",
+                "users",
+                "data",
+                "constraints",
+                "expected_result",
+                "success_criteria",
+                "contact",
+                "interaction_format"
+              ]
+            },
+            "type": "array",
+            "title": "Filled Fields"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "title",
+                "topic",
+                "context",
+                "need",
+                "users",
+                "data",
+                "constraints",
+                "expected_result",
+                "success_criteria",
+                "contact",
+                "interaction_format"
+              ]
+            },
+            "type": "array",
+            "title": "Missing Fields"
+          },
+          "mode": {
+            "type": "string",
+            "const": "demo",
+            "title": "Mode",
+            "default": "demo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions",
+          "filled_fields",
+          "missing_fields"
+        ],
+        "title": "AnalyzeRead"
+      },
+      "AnalyzeRequest": {
+        "properties": {
+          "draft_text": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Draft Text"
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Topic",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_text"
+        ],
+        "title": "AnalyzeRequest"
+      },
+      "Answer": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Question Id"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "title",
+              "topic",
+              "context",
+              "need",
+              "users",
+              "data",
+              "constraints",
+              "expected_result",
+              "success_criteria",
+              "contact",
+              "interaction_format"
+            ],
+            "title": "Field"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Answer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question_id",
+          "field",
+          "answer"
+        ],
+        "title": "Answer"
+      },
+      "Breakdown": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "max": {
+            "type": "integer",
+            "title": "Max"
+          },
+          "earned": {
+            "type": "integer",
+            "title": "Earned"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "label",
+          "max",
+          "earned",
+          "reason"
+        ],
+        "title": "Breakdown"
+      },
+      "BuildRead": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/Card"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card",
+          "warnings"
+        ],
+        "title": "BuildRead"
+      },
+      "BuildRequest": {
+        "properties": {
+          "draft_text": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Draft Text"
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Topic",
+            "default": ""
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "type": "array",
+            "maxItems": 11,
+            "title": "Answers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_text"
+        ],
+        "title": "BuildRequest"
+      },
+      "Card": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": ""
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Topic",
+            "default": ""
+          },
+          "context": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Context",
+            "default": ""
+          },
+          "need": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Need",
+            "default": ""
+          },
+          "users": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Users",
+            "default": ""
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Data",
+            "default": ""
+          },
+          "constraints": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Constraints",
+            "default": ""
+          },
+          "expected_result": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Expected Result",
+            "default": ""
+          },
+          "success_criteria": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Success Criteria",
+            "default": ""
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Contact",
+            "default": ""
+          },
+          "interaction_format": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Interaction Format",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Card"
+      },
+      "CardRequest": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/Card"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "card"
+        ],
+        "title": "CardRequest"
+      },
+      "Decision": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ],
+            "title": "Decision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "Decision"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Missing": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint"
+          },
+          "potential_points": {
+            "type": "integer",
+            "title": "Potential Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "hint",
+          "potential_points"
+        ],
+        "title": "Missing"
+      },
+      "ProgressCreate": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "prototype",
+              "testing",
+              "final"
+            ],
+            "title": "Stage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stage"
+        ],
+        "title": "ProgressCreate"
+      },
+      "ProgressRead": {
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "title": "Proposal Id"
+          },
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "stages_done": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "prototype",
+                "testing",
+                "final"
+              ]
+            },
+            "type": "array",
+            "title": "Stages Done"
+          },
+          "points_total": {
+            "type": "integer",
+            "title": "Points Total"
+          },
+          "team_points_total": {
+            "type": "integer",
+            "title": "Team Points Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "team_id",
+          "stages_done",
+          "points_total",
+          "team_points_total"
+        ],
+        "title": "ProgressRead"
+      },
+      "ProposalCreate": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Team Id"
+          },
+          "idea": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Idea"
+          },
+          "plan": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Plan"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date",
+            "title": "Deadline"
+          },
+          "prototype_url": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Prototype Url",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "team_id",
+          "idea",
+          "plan",
+          "deadline"
+        ],
+        "title": "ProposalCreate"
+      },
+      "ProposalRead": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Team Id"
+          },
+          "idea": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Idea"
+          },
+          "plan": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Plan"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date",
+            "title": "Deadline"
+          },
+          "prototype_url": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Prototype Url",
+            "default": ""
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "stages_done": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "prototype",
+                "testing",
+                "final"
+              ]
+            },
+            "type": "array",
+            "title": "Stages Done"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "team_id",
+          "idea",
+          "plan",
+          "deadline",
+          "id",
+          "task_id",
+          "status",
+          "stages_done",
+          "created_at"
+        ],
+        "title": "ProposalRead"
+      },
+      "Question": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "title",
+              "topic",
+              "context",
+              "need",
+              "users",
+              "data",
+              "constraints",
+              "expected_result",
+              "success_criteria",
+              "contact",
+              "interaction_format"
+            ],
+            "title": "Field"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "field",
+          "question"
+        ],
+        "title": "Question"
+      },
+      "Score": {
+        "properties": {
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "working",
+              "ready",
+              "priority"
+            ],
+            "title": "Level"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/Breakdown"
+            },
+            "type": "array",
+            "title": "Breakdown"
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/Missing"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "level",
+          "breakdown",
+          "missing"
+        ],
+        "title": "Score"
+      },
+      "TaskCreate": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/Card"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "card"
+        ],
+        "title": "TaskCreate"
+      },
+      "TaskRead": {
+        "properties": {
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "working",
+              "ready",
+              "priority"
+            ],
+            "title": "Level"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/Breakdown"
+            },
+            "type": "array",
+            "title": "Breakdown"
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/Missing"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "card": {
+            "$ref": "#/components/schemas/Card"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalRead"
+            },
+            "type": "array",
+            "title": "Proposals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "level",
+          "breakdown",
+          "missing",
+          "id",
+          "card",
+          "confirmed",
+          "created_at",
+          "updated_at",
+          "proposals"
+        ],
+        "title": "TaskRead"
+      },
+      "TaskSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "need": {
+            "type": "string",
+            "title": "Need"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "working",
+              "ready",
+              "priority"
+            ],
+            "title": "Level"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          },
+          "proposals_count": {
+            "type": "integer",
+            "title": "Proposals Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "topic",
+          "need",
+          "score",
+          "level",
+          "confirmed",
+          "proposals_count",
+          "created_at"
+        ],
+        "title": "TaskSummary"
+      },
+      "TaskUpdate": {
+        "properties": {
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Card"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TaskUpdate"
+      },
+      "TeamCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Interests"
+          },
+          "skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Skills"
+          },
+          "tech": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Tech"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TeamCreate"
+      },
+      "TeamRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "interests": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Interests"
+          },
+          "skills": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Skills"
+          },
+          "tech": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Tech"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "points": {
+            "type": "integer",
+            "title": "Points"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "id",
+          "points"
+        ],
+        "title": "TeamRead"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

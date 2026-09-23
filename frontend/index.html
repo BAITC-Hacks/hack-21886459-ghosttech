@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GhostTech — задачи и команды</title>
     <link rel="stylesheet" href="./styles.css">
-    <script src="./mock.js" defer></script>
     <script src="./api.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
@@ -16,7 +15,12 @@
           <p class="eyebrow">GhostTech</p>
           <h1>Рейтинг качества бизнес-задач</h1>
         </div>
-        <div id="mode-label" class="status-pill" aria-live="polite">Режим: Демо-режим без ключа</div>
+        <div class="account-area">
+          <div id="mode-label" class="status-pill" aria-live="polite">Подключение к серверу…</div>
+          <div class="account-controls">
+            <button id="team-button" class="secondary-button" type="button">Команды</button>
+          </div>
+        </div>
       </header>
 
       <nav class="tabs" aria-label="Основные разделы">
@@ -24,6 +28,8 @@
         <button class="tab" type="button" data-tab="catalog" aria-selected="false">Каталог</button>
         <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Бизнес: отклики</button>
       </nav>
+
+      <p id="app-message" class="notice" role="status" hidden></p>
 
       <main>
         <section id="business-task" class="tab-panel is-active" aria-label="Бизнес: новая задача">
@@ -127,6 +133,7 @@
                 <option value="ритейл">Ритейл</option>
                 <option value="логистика">Логистика</option>
                 <option value="городские сервисы">Городские сервисы</option>
+                <option value="здравоохранение">Здравоохранение</option>
               </select>
             </label>
             <label>
@@ -141,6 +148,7 @@
             </label>
           </div>
           <div id="catalog-list" class="task-grid"></div>
+          <button id="catalog-more" class="secondary-button" type="button" hidden>Показать ещё</button>
         </section>
 
         <section id="business-proposals" class="tab-panel" aria-label="Бизнес: отклики" hidden>
@@ -151,10 +159,36 @@
           <div class="proposal-controls">
             <label for="proposal-task">Задача</label>
             <select id="proposal-task"></select>
+            <button id="edit-task-button" class="secondary-button" type="button">Редактировать карточку</button>
           </div>
           <div id="proposal-list" class="proposal-list"></div>
         </section>
       </main>
     </div>
+    <dialog id="team-dialog" aria-labelledby="team-title">
+      <form id="team-form">
+        <div class="panel-header"><h2 id="team-title">Команды</h2><button type="button" class="secondary-button" data-close="team-dialog" aria-label="Закрыть">×</button></div>
+        <div class="field-block"><label for="team-choice">Выберите команду или создайте новую</label><select id="team-choice"><option value="">Новая команда</option></select></div>
+        <div class="field-block"><label for="team-name">Название</label><input id="team-name" name="name" required maxlength="100"></div>
+        <div class="field-block"><label for="team-interests">Интересы, через запятую</label><input id="team-interests" name="interests" maxlength="1000"></div>
+        <div class="field-block"><label for="team-skills">Навыки, через запятую</label><input id="team-skills" name="skills" maxlength="1000"></div>
+        <div class="field-block"><label for="team-tech">Технологии, через запятую</label><input id="team-tech" name="tech" maxlength="1000"></div>
+        <p id="team-error" class="form-error" role="alert"></p>
+        <button class="primary-button" type="submit">Сохранить команду</button>
+      </form>
+    </dialog>
+    <dialog id="proposal-dialog" aria-labelledby="proposal-title">
+      <form id="proposal-form">
+        <div class="panel-header"><h2 id="proposal-title">Отклик на задачу</h2><button type="button" class="secondary-button" data-close="proposal-dialog" aria-label="Закрыть">×</button></div>
+        <p id="proposal-target" class="muted"></p>
+        <div class="field-block"><label for="proposal-team">Команда</label><select id="proposal-team" name="team_id" required></select></div>
+        <div class="field-block"><label for="proposal-idea">Идея</label><textarea id="proposal-idea" name="idea" required maxlength="5000"></textarea></div>
+        <div class="field-block"><label for="proposal-plan">План</label><textarea id="proposal-plan" name="plan" required maxlength="5000"></textarea></div>
+        <div class="field-block"><label for="proposal-deadline">Срок</label><input id="proposal-deadline" name="deadline" type="date" required></div>
+        <div class="field-block"><label for="proposal-url">Ссылка на прототип (необязательно)</label><input id="proposal-url" name="prototype_url" type="url" maxlength="2048" placeholder="https://"></div>
+        <p id="proposal-error" class="form-error" role="alert"></p>
+        <button class="primary-button" type="submit">Отправить отклик</button>
+      </form>
+    </dialog>
   </body>
 </html>
