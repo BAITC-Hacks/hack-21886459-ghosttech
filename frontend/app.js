@@ -224,6 +224,31 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#analysis-warning').hidden = !result.warnings?.length;
     $('#draft-analysis').hidden = false;
   }
+  function celebrate(level) {
+    const panel = $('.score-panel'), badge = $('#score-level'), gain = $('#score-gain');
+    const previous = panel.dataset.celebratedLevel, score = Number($('#score-value').textContent);
+    const previousScore = Number(panel.dataset.celebratedScore ?? score);
+    panel.dataset.celebratedLevel = level; panel.dataset.celebratedScore = score;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (score > previousScore) {
+      gain.classList.remove('is-visible'); void gain.offsetWidth;
+      gain.classList.add('is-visible');
+    }
+    if (!previous || previous === level || score <= previousScore) return;
+    badge.classList.remove('is-celebrating'); void badge.offsetWidth;
+    badge.classList.add('is-celebrating');
+    setTimeout(() => badge.classList.remove('is-celebrating'), 400);
+    if (!['ready', 'priority'].includes(level)) return;
+    for (let i = 0; i < 18; i++) {
+      const piece = document.createElement('span');
+      piece.className = 'quest-confetti'; piece.setAttribute('aria-hidden', 'true');
+      piece.style.setProperty('--x', `${(Math.random() - .5) * 260}px`);
+      piece.style.setProperty('--y', `${-40 - Math.random() * 120}px`);
+      piece.style.setProperty('--rotation', `${(Math.random() - .5) * 720}deg`);
+      piece.style.setProperty('--confetti-color', `var(${['--reward', '--primary', `--lvl-${level}`][i % 3]})`);
+      panel.append(piece); setTimeout(() => piece.remove(), 900);
+    }
+  }
   async function refreshScore() {
     const version = ++scoreRevision;
     const result = await api.scoreCard({ card: { ...card } });
@@ -242,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const row = result.breakdown.find((row) => row.field === key);
       $(`#label-${key}`).textContent = `${label} · ${row ? `${row.earned}/${row.max}${row.earned === row.max ? ' ✓' : ''}` : 'обязательно'}`;
     }
+    celebrate(result.level);
   }
   $('#card-form').addEventListener('input', (event) => {
     if (!event.target.dataset.field) return;
@@ -457,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderRecommendations() {
     $('#recommendation-counter').textContent = `Показано ${Math.min(recommendationLimit, recommendations.length)} из ${recommendations.length}`;
-    $('#recommendation-list').innerHTML = recommendations.length ? recommendations.slice(0, recommendationLimit).map(({ task, score, matched }) => `<article class="task-card recommendation-card"><div class="task-card-header"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${score}% совпадение</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-summary"><span>Совпало:</span><div class="match-tags">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${escape(item)}</span>`).join('')}</div></div><button class="primary-button" type="button" data-task-id="${escape(task.id)}">Подробнее / Откликнуться</button></article>`).join('') : '<p class="placeholder-text">Подходящих задач пока нет. Все опубликованные задачи доступны в каталоге.</p>';
+    $('#recommendation-list').innerHTML = recommendations.length ? recommendations.slice(0, recommendationLimit).map(({ task, score, matched }) => `<article class="task-card recommendation-card"><div class="task-card-header"><span class="level-badge level-${task.level}">${levelMeta[task.level].label}</span><strong>${score}% совпадение</strong></div><h3>${escape(task.title)}</h3><p class="task-topic">${escape(task.topic)}</p>${ownerLine(task)}${taskTags(task)}<p>${escape(task.need || 'Потребность пока не описана.')}</p><div class="match-summary"><span>Совпало:</span><div class="match-tags" data-matched="${matched.length > 0}">${(matched.length ? matched : ['подходит по уровню']).map((item) => `<span>${escape(item)}</span>`).join('')}</div></div><button class="primary-button" type="button" data-task-id="${escape(task.id)}">Подробнее / Откликнуться</button></article>`).join('') : '<p class="placeholder-text">Подходящих задач пока нет. Все опубликованные задачи доступны в каталоге.</p>';
     $('#recommendation-more').hidden = recommendationLimit >= recommendations.length;
   }
   onClick('#recommendation-more', () => {
