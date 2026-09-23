@@ -228,6 +228,210 @@ main {
 .status-accepted { background: var(--ready-soft); color: #047857; }
 .status-rejected { background: #FEF2F2; color: #B91C1C; }
 
+.team-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 20px;
+  align-items: start;
+}
+
+.team-heading {
+  align-items: flex-end;
+}
+
+.team-heading .eyebrow {
+  margin-bottom: 4px;
+}
+
+.team-heading h2 {
+  font-size: 1.7rem;
+}
+
+.team-heading .muted {
+  margin: 5px 0 0;
+}
+
+.team-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.team-profile {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.team-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 84px;
+  padding: 13px;
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.team-stat span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.team-stat strong {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 12px;
+}
+
+.section-heading h3 {
+  font-size: 1.15rem;
+}
+
+.section-heading p {
+  margin: 3px 0 0;
+}
+
+.proposals-heading {
+  margin-top: 30px;
+}
+
+.recommendation-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.recommendation-card .primary-button {
+  align-self: flex-start;
+  margin-top: 14px;
+}
+
+.match-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.match-tags span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.75rem;
+}
+
+.team-proposal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.team-proposal-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-detail-panel {
+  position: sticky;
+  top: 20px;
+  padding: 18px;
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.detail-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-panel-header h3 {
+  margin-top: 5px;
+  font-size: 1.25rem;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.detail-content {
+  margin-top: 18px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.match-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.match-box strong {
+  color: var(--text);
+}
+
+.response-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.response-form h4 {
+  margin-bottom: 4px;
+}
+
+.response-form textarea {
+  min-height: 88px;
+}
+
+.response-form input {
+  margin-bottom: 6px;
+}
+
 .wizard-shell {
   display: flex;
   flex-direction: column;
@@ -515,7 +719,12 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .score-panel {
+  .team-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .score-panel,
+  .team-detail-panel {
     position: static;
   }
 }
@@ -553,6 +762,25 @@ textarea {
 
   .task-card-footer,
   .proposal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .team-heading,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .team-selector {
+    width: 100%;
+  }
+
+  .team-profile {
+    grid-template-columns: 1fr;
+  }
+
+  .team-proposal-row {
     align-items: flex-start;
     flex-direction: column;
   }

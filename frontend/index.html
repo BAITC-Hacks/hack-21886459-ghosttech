@@ -27,6 +27,7 @@
         <button class="tab is-active" type="button" data-tab="business-task" aria-selected="true">Бизнес: новая задача</button>
         <button class="tab" type="button" data-tab="catalog" aria-selected="false">Каталог</button>
         <button class="tab" type="button" data-tab="business-proposals" aria-selected="false">Бизнес: отклики</button>
+        <button class="tab" type="button" data-tab="team" aria-selected="false">Команда</button>
       </nav>
 
       <p id="app-message" class="notice" role="status" hidden></p>
@@ -162,6 +163,65 @@
             <button id="edit-task-button" class="secondary-button" type="button">Редактировать карточку</button>
           </div>
           <div id="proposal-list" class="proposal-list"></div>
+        </section>
+
+        <section id="team" class="tab-panel" aria-label="Команда" hidden>
+          <div class="team-layout">
+            <div class="team-main">
+              <div class="panel-header team-heading">
+                <div>
+                  <p class="eyebrow">Рабочее пространство команды</p>
+                  <h2 id="team-name">Команда</h2>
+                  <p id="team-summary" class="muted"></p>
+                </div>
+                <label class="team-selector">
+                  Команда
+                  <select id="team-select" aria-label="Выберите команду"></select>
+                </label>
+              </div>
+
+              <div class="team-profile" id="team-profile"></div>
+
+              <div class="section-heading">
+                <div>
+                  <h3>Рекомендованные задачи</h3>
+                  <p class="muted">Подобраны по интересам и навыкам команды</p>
+                </div>
+                <span id="recommendation-counter" class="muted">0 задач</span>
+              </div>
+              <div id="recommendation-list" class="task-grid"></div>
+
+              <div class="section-heading proposals-heading">
+                <div>
+                  <h3>Мои отклики</h3>
+                  <p class="muted">Задачи, на которые команда уже откликнулась</p>
+                </div>
+              </div>
+              <div id="team-proposals-list" class="proposal-list"></div>
+            </div>
+
+            <aside id="team-detail-panel" class="team-detail-panel" hidden>
+              <div class="detail-panel-header">
+                <div>
+                  <span class="score-label">Подробнее</span>
+                  <h3 id="detail-title">Выберите задачу</h3>
+                </div>
+                <button id="close-detail-button" class="icon-button" type="button" aria-label="Закрыть панель">×</button>
+              </div>
+              <div id="detail-content" class="detail-content"></div>
+              <form id="response-form" class="response-form" hidden>
+                <h4>Откликнуться</h4>
+                <label for="response-idea">Идея решения</label>
+                <textarea id="response-idea" required placeholder="Коротко опишите, что предложит команда"></textarea>
+                <label for="response-plan">План работы</label>
+                <textarea id="response-plan" required placeholder="Опишите первые шаги и результат"></textarea>
+                <label for="response-deadline">Срок</label>
+                <input id="response-deadline" type="date" required>
+                <button class="primary-button" type="submit">Отправить отклик</button>
+                <p id="response-message" class="publish-message" aria-live="polite"></p>
+              </form>
+            </aside>
+          </div>
         </section>
       </main>
     </div>

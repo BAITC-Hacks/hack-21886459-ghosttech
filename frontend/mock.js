@@ -7,7 +7,7 @@ window.mockApi = (() => {
 
   const getCards = () => window.__mockData?.cards || cardData;
   const getTeams = () => window.__mockData?.teams || teamData;
-  const getProposals = () => window.__mockData?.proposals || proposalData;
+  const getProposalData = () => window.__mockData?.proposals || proposalData;
 
   const FIELD_CONFIG = {
     context: { max: 10, full: 40, half: 10 },
@@ -60,7 +60,7 @@ window.mockApi = (() => {
   };
 
   const findTaskById = (id) => getCards().find((task) => task.id === id);
-  const findProposalById = (id) => getProposals().find((proposal) => proposal.id === id);
+  const findProposalById = (id) => getProposalData().find((proposal) => proposal.id === id);
 
   const makeTaskPayload = (task) => ({
     id: task.id,
@@ -195,11 +195,15 @@ window.mockApi = (() => {
       }
       return {
         ...makeTaskPayload(task),
-        proposals: getProposals().filter((proposal) => proposal.task_id === id)
+        proposals: getProposalData().filter((proposal) => proposal.task_id === id)
       };
     },
 
     getTeams,
+
+    getProposals: ({ team_id = '' } = {}) => getProposalData()
+      .filter((proposal) => !team_id || proposal.team_id === team_id)
+      .map((proposal) => ({ ...proposal })),
 
     createProposal: (taskId, payload) => {
       const task = findTaskById(taskId);
@@ -207,8 +211,9 @@ window.mockApi = (() => {
         const error = { error: { code: 404, message: 'Задача не найдена.' } };
         throw new Error(JSON.stringify(error));
       }
+      const proposalStore = getProposalData();
       const newProposal = {
-        id: `p${proposalData.length + 1}`,
+        id: `p${proposalStore.length + 1}`,
         task_id: taskId,
         team_id: payload.team_id,
         idea: payload.idea,
@@ -217,7 +222,7 @@ window.mockApi = (() => {
         prototype_url: payload.prototype_url,
         status: 'pending'
       };
-      proposalData.push(newProposal);
+      proposalStore.push(newProposal);
       task.proposals.push(newProposal.id);
       return newProposal;
     },
