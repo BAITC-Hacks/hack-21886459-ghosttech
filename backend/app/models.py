@@ -33,6 +33,7 @@ class Team(Base):
     skills: Mapped[list[str]] = mapped_column(JSON, default=list)
     tech: Mapped[list[str]] = mapped_column(JSON, default=list)
     base_points: Mapped[int] = mapped_column(default=0)
+    contact: Mapped[str] = mapped_column(String(500), default="")
     is_demo: Mapped[bool] = mapped_column(default=False)
     members: Mapped[list["Participant"]] = relationship(back_populates="team", lazy="selectin")
 

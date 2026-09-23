@@ -65,6 +65,7 @@ def team_read(db, team: Team):
         "skills": team.skills,
         "tech": team.tech,
         "points": team_points(db, team),
+        "contact": team.contact,
         "members": team.members,
         "is_demo": team.is_demo,
     }
@@ -324,6 +325,8 @@ def update_team(team_id: str, data: TeamCreate, db: Db, student: Student):
     if team.is_demo or student.team_id != team.id:
         raise HTTPException(403, "Команда принадлежит другим участникам")
     for key, value in data.model_dump().items():
+        if key == "contact" and key not in data.model_fields_set:
+            continue
         setattr(team, key, value)
     db.commit()
     return team_read(db, team)

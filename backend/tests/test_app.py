@@ -355,7 +355,8 @@ def catalog_cases(client):
                 ["бот"],
                 ["аналитика данных"],
             ][index]
-            record.owner_id = "catalog-owner" if index in [0, 1] else None
+            if index in [0, 1]:
+                record.owner_id = "catalog-owner"
     for index in range(3):
         with TestClient(client.app) as respondent_client:
             register(respondent_client, f"respondent-{index}@example.test", "student")

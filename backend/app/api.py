@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app import auth, routes
 from app.config import ROOT_DIR, Settings
 from app.database import Db, create_db_engine
+from app.leaderboard import router as profiles_router
 
 
 def create_app(settings: Settings | None = None):
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None):
 
     api.include_router(auth.router)
     api.include_router(routes.router)
+    api.include_router(profiles_router)
     app.include_router(api)
 
     @app.get("/", include_in_schema=False)

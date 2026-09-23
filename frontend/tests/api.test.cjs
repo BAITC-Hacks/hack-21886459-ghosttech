@@ -106,3 +106,17 @@ test('AI validation errors show the Russian server message', async () => {
   }) }));
   await assert.rejects(api.analyzeTask({}), (error) => error.status === 422 && error.message.includes('минимум 10'));
 });
+
+test('leaderboard period and public profile pagination are sent to the server', async () => {
+  const urls = [];
+  const api = client(async (url) => {
+    urls.push(url);
+    return { ok: true, status: 200, json: async () => ({}) };
+  }, '8000');
+  await api.getLeaderboard({ period: 'month', limit: 10 });
+  await api.getBusinessProfile('business/1', { offset: 12, limit: 12 });
+  await api.getTeamProfile('team/1', { offset: 0, limit: 12 });
+  assert.deepEqual(urls, ['/api/leaderboard?period=month&limit=10',
+    '/api/profiles/businesses/business%2F1?offset=12&limit=12',
+    '/api/profiles/teams/team%2F1?offset=0&limit=12']);
+});

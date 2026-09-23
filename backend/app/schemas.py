@@ -170,6 +170,7 @@ class TaskSummary(BaseModel):
 
 class TeamCreate(Input):
     name: str = Field(min_length=1, max_length=100)
+    contact: str = Field(default="", max_length=500)
     interests: list[Tag] = Field(default_factory=list, max_length=30)
     skills: list[Tag] = Field(default_factory=list, max_length=30)
     tech: list[Tag] = Field(default_factory=list, max_length=30)
@@ -296,3 +297,53 @@ class BuildResult(Input):
 
 class BuildRead(BuildResult):
     mode: Literal["demo", "openai"] = "demo"
+
+
+class BusinessRank(BaseModel):
+    rank: int
+    profile: ParticipantRead
+    points: int
+    published_tasks: int
+    average_readiness: float
+    completed_tasks: int
+    open_tasks: int
+
+
+class TeamRank(BaseModel):
+    rank: int
+    team: TeamRead
+    points: int
+    completed_tasks: int
+    confirmed_stages: int
+
+
+class LeaderboardRead(BaseModel):
+    period: Literal["month", "all"]
+    starts_at: datetime | None
+    as_of: datetime
+    businesses: list[BusinessRank]
+    teams: list[TeamRank]
+
+
+class PublicTaskSummary(TaskSummary):
+    open_for_proposals: bool
+
+
+class BusinessProfileRead(BaseModel):
+    profile: ParticipantRead
+    contacts: list[str]
+    tasks: list[PublicTaskSummary]
+    total_tasks: int
+    open_tasks: int
+
+
+class TeamProjectRead(BaseModel):
+    task: PublicTaskSummary
+    stages_done: list[Stage]
+    prototype_url: str
+
+
+class TeamProfileRead(BaseModel):
+    team: TeamRead
+    projects: list[TeamProjectRead]
+    total_projects: int
